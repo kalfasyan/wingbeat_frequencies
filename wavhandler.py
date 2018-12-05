@@ -104,7 +104,9 @@ class WavHandler(object):
 			raise ValueError('You have not preprocessed the data')
 
 		if isinstance(self.df_signals, pd.DataFrame) and not self.df_signals.empty:
+			# accepted_signals will be a list of the signal filenames that passed the evaluation
 			self.accepted_signals = evaluate(self.wav_filenames, self.df_signals)
+			# we select the accepted signals for the df_signals dataframe
 			self.df_signals = self.df_signals[self.accepted_signals]
 			logging.debug('df_signals filtered')
 			logging.debug('accepted_signals created')
@@ -165,6 +167,7 @@ def evaluate(paths, df=None, butter_band=True):
 	"""
 	from scipy import signal
 	from scipy.signal import find_peaks
+	from sklearn.preprocessing import normalize
 
 	if df is None:
 		datamatrix, names = read_simple(paths)
@@ -184,9 +187,13 @@ def evaluate(paths, df=None, butter_band=True):
 
 		freqs, pows = signal.welch(sig, F_S, scaling='density', window='hamming')
 
-		threshold = 0.000000025
+		pows = normalize(pows.reshape(-1,1), norm='l2', axis=0).reshape(-1,)
+
+		threshold = 0.1
 		peaks, vals = find_peaks(pows, height=threshold, distance=10)
 		peaks = [v for i,v in enumerate(peaks) if freqs[peaks][i] > 400]
+
+		damping = damping_ratio(freqs, pows, peaks)
 
 		sub = pd.DataFrame(np.vstack((freqs[peaks], pows[peaks])).T, columns=['freqs','pows'])
 		peakseries = sub['pows'].nlargest(10)
@@ -213,7 +220,10 @@ def psd_welch_freqs(paths):
 	for col in df:
 		sig = df[col].values
 		freqs, pows = signal.welch(sig, F_S, scaling='density', window='hamming')
-		threshold = 0.000000025
+
+		pows = normalize(pows.reshape(-1,1), norm='l2', axis=0).reshape(-1,)
+		threshold = 0.1
+		
 		peaks, _ = find_peaks(pows, height=threshold, distance=10)
 		peaks = [v for i,v in enumerate(peaks) if freqs[peaks][i] > 400]
 
@@ -246,3 +256,27 @@ def signal_amplitudes(paths, top_nr=3):
 	for col in df:
 		top_ampls[col] = np.abs(df[col]).nlargest(top_nr).tolist()
 	return top_ampls
+
+def damping_ratio(freqs, ampls, peaks):
+	fund_ampl = ampls[peaks[0]]
+	fund_freq = freqs[peaks[0]]
+
+	peak_a, peak_b = peaks[0], peaks[0]
+
+	while ampls[peak_a] > fund_ampl/2:
+		peak_a+=1
+	while ampls[peak_b] > fund_ampl/2:
+		peak_b-=1
+
+	omega_a, omega_b = freqs[peak_a], freqs[peak_b]
+	damping = (omega_a - omega_b) / (2*fund_freq)
+	return damping
+
+def damping_ratios(paths):
+	#// TODO: make this find freqs, pows, peaks and then damping ratio
+	df, names = read_simple(paths, return_df=True)
+
+	damps = {}
+	for col in df:
+		damps[col] = None
+	return None
