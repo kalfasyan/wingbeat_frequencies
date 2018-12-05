@@ -47,8 +47,12 @@ class WavHandler(object):
 			raise ValueError('No filenames retrieved!')
 
 	def read(self, create_table=False):
-
-		datamatrix, names = read_simple(self.wav_filenames)
+		"""
+		Reads the wavhandler files ínto a pandas dataframe
+		If create_table is True, then it creates a data table for the wavhandler object.
+		This table contains information about the files and the corresponding signals.
+		"""
+		datamatrix, names = read_simple(self.wav_filenames, return_df=True)
 
 		if create_table:
 			df = pd.DataFrame(names, columns=['names'])
@@ -67,20 +71,30 @@ class WavHandler(object):
 			logging.debug('df_signals created')
 
 	def preprocess(self, butter_bandpass=True):
+		"""
+		Preprocesses the signal.
+		If butter_bandpass is True, then it applies a Buttersworth band-pass filter with global variable settings.
+		"""
 		if not len(self.df_signals):
 			raise ValueError('No df_signals. Read the wav files first!')
 		if butter_bandpass:
-			self.df_signals = butter_dataframe(self.df_signals, L_CUTOFF, H_CUTOFF, F_S, order=B_ORDER)
+			self.df_signals = butter_dataframe(self.df_signals, 
+											   L_CUTOFF, 
+											   H_CUTOFF, 
+											   F_S, 
+											   order=B_ORDER)
 			logging.debug('Buttersworth bandpass filter applied, [{}, {}, {}, order={}]'.format(L_CUTOFF,
 																								H_CUTOFF,
 																								F_S,
 																								B_ORDER))
-			self.preprocessed = True
+			self.preprocessed = True # Flag to check at filter_accepted_signals if the signals have been preprocessed
 		else:
 			return None
 
 	def filter_accepted_signals(self):
-
+		"""
+		Filters the signals according to the evaluation performed in evaluate function.
+		"""
 		from scipy import signal
 		from scipy.signal import find_peaks
 
@@ -98,6 +112,12 @@ class WavHandler(object):
 			raise ValueError('Not a DataFrame or empty DataFrame!')
 
 	def crop(self, window=500):
+		"""
+		Crops the signals using a rolling mean with a specified window as the number of values 
+		in the abs(signal) to calculate the mean for. If window=500, then the moving average uses 
+		500 values from the signal, then finds the max of this new signal and extracts the range 
+		to use in order to crop the original signal.
+		"""
 		if not len(self.df_signals):
 			raise ValueError('No df_signals. Read the wav files first!')
 
@@ -112,7 +132,11 @@ class WavHandler(object):
 
 
 def read_simple(paths, return_df=False):
-
+	"""
+	Function to read wav files into a numpy array given their paths.
+	It also returns their names for verification purposes.
+	Return a dataframe if return_df is True.
+	"""
 	import soundfile as sf
 
 	data = []
@@ -128,14 +152,17 @@ def read_simple(paths, return_df=False):
 	logging.debug('names list created')
 
 	if return_df:
-		datamatrix = pd.DataFrame(datamatrix,
-								columns=[names[i].split('/')[-1][:-4] for i in range(datamatrix.shape[1])])
+		datamatrix = pd.DataFrame(datamatrix, 
+					  columns=[names[i].split('/')[-1][:-4] for i in range(datamatrix.shape[1])])
 		return datamatrix, names
 	else:
 		return datamatrix, names
 
 
 def evaluate(paths, df=None, butter_band=True):
+	"""
+	Evaluation function for wav signals given their paths.
+	"""
 	from scipy import signal
 	from scipy.signal import find_peaks
 
@@ -146,8 +173,11 @@ def evaluate(paths, df=None, butter_band=True):
 		raise ValueError('Empty Dataframe. Cannot evaluate!')	
 
 	if butter_band:
-		df = butter_dataframe(df, L_CUTOFF, H_CUTOFF, F_S, order=B_ORDER)
-
+		df = butter_dataframe(df, 
+							  L_CUTOFF, 
+							  H_CUTOFF, 
+							  F_S, 
+							  order=B_ORDER)
 	good_sigs = []
 	for col in df:
 		sig = df[col]
@@ -216,6 +246,3 @@ def signal_amplitudes(paths, top_nr=3):
 	for col in df:
 		top_ampls[col] = np.abs(df[col]).nlargest(top_nr).tolist()
 	return top_ampls
-
-
-# USE EVALUATE IN FILTER_ACCEPTED_SIGNALS
