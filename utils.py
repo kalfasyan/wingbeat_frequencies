@@ -21,6 +21,57 @@ def butter_dataframe(df, lowcut, highcut, fs, order=4):
 		df[col] = y
 	return df
 
+def crop_signal(data, window=300, intens_threshold=0.004, offset=250):
+	import more_itertools as mit
+
+	sig = df[col].values
+	sigseries = pd.Series(sig)
+	rolling_avg = np.abs(sigseries).rolling(window).mean()
+	rolling_avg_thd = rolling_avg[rolling_avg > intens_threshold]
+	if len(rolling_avg_thd):
+		iterable = rolling_avg_thd.index.tolist()
+		groups = [list(group) for group in mit.consecutive_groups(iterable)]
+		# Sizes of the groups
+		group_lens = pd.Series([len(ww[i]) for i in range(len(ww))])
+		# Index of largest group
+		lrgst_group_idx = group_lens.idxmax()
+		# The first element of the largest group is where we start cropping
+		crop_start = groups[lrgst_group_idx][0]
+		# The last element of the largest group is where we stop cropping
+		crop_end = groups[lrgst_group_idx][-1]
+
+		sig_cropped = sigseries.iloc[  crop_start -offset : crop_end[-1] - offset]
+		return sig_cropped
+	else:
+		return None
+
+def damping_ratio(freqs, ampls, peaks):
+	fund_ampl = ampls[peaks[0]]
+	fund_freq = freqs[peaks[0]]
+
+	peak_a, peak_b = peaks[0], peaks[0]
+
+	while ampls[peak_a] > fund_ampl/2:
+		peak_a+=1
+	while ampls[peak_b] > fund_ampl/2:
+		peak_b-=1
+
+	omega_a, omega_b = freqs[peak_a], freqs[peak_b]
+	damping = (omega_a - omega_b) / (2*fund_freq)
+	return damping
+
+def psd_process(data, peak_thd=0.05, peak_dist=10, min_freq=400):
+	sig = data
+	# Calculating PSD
+	freqs, p_amps = signal.welch(sig, F_S, scaling='density', window='hamming', nfft=8192, noverlap=None)
+	# Normalization of PSD amplitudes
+	p_amps = normalize(p_amps.reshape(-1,1), norm='l2', axis=0).reshape(-1,)
+
+	peaks, vals = find_peaks(p_amps, height=peak_thd, distance=peak_dist)
+	peaks = [v for i,v in enumerate(peaks) if freqs[peaks][i] > min_freq]
+
+	return freqs, p_amps, peaks
+
 def tsfresh_transform(df):
 	all_subs = []
 	for i,col in enumerate(df):

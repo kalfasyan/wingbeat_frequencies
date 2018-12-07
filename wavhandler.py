@@ -9,8 +9,8 @@ import logging
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
 
-L_CUTOFF = 75.
-H_CUTOFF = 1000.
+L_CUTOFF = 100.
+H_CUTOFF = 2500.
 F_S = 8000.
 B_ORDER = 4
 
@@ -78,15 +78,8 @@ class WavHandler(object):
 		if not len(self.df_signals):
 			raise ValueError('No df_signals. Read the wav files first!')
 		if butter_bandpass:
-			self.df_signals = butter_dataframe(self.df_signals, 
-											   L_CUTOFF, 
-											   H_CUTOFF, 
-											   F_S, 
-											   order=B_ORDER)
-			logging.debug('Buttersworth bandpass filter applied, [{}, {}, {}, order={}]'.format(L_CUTOFF,
-																								H_CUTOFF,
-																								F_S,
-																								B_ORDER))
+			self.df_signals = butter_dataframe(self.df_signals, L_CUTOFF, H_CUTOFF, F_S, order=B_ORDER)
+			logging.debug('Buttersworth bandpass filter applied, [{}, {}, {}, order={}]'.format(L_CUTOFF, H_CUTOFF, F_S,order=B_ORDER))
 			self.preprocessed = True # Flag to check at filter_accepted_signals if the signals have been preprocessed
 		else:
 			return None
@@ -160,8 +153,15 @@ def read_simple(paths, return_df=False):
 	else:
 		return datamatrix, names
 
+def preprocess_simple(df, bandpass=True, crop=True):
 
-def evaluate(paths, df=None, butter_band=True):
+	if bandpass:
+		df = butter_dataframe(df, L_CUTOFF, H_CUTOFF, F_S, order=B_ORDER)
+	if crop:
+		df = crop_df(df, window=300, intens_threshold=0.004, offset=250)
+	return df
+
+def evaluate(df):
 	"""
 	Evaluation function for wav signals given their paths.
 	"""
@@ -169,23 +169,11 @@ def evaluate(paths, df=None, butter_band=True):
 	from scipy.signal import find_peaks
 	from sklearn.preprocessing import normalize
 
-	if df is None:
-		datamatrix, names = read_simple(paths)
-		df = pd.DataFrame(datamatrix, columns=[names[i].split('/')[-1][:-4] for i in range(datamatrix.shape[1])])
-	elif df.empty:
-		raise ValueError('Empty Dataframe. Cannot evaluate!')	
-
-	if butter_band:
-		df = butter_dataframe(df, 
-							  L_CUTOFF, 
-							  H_CUTOFF, 
-							  F_S, 
-							  order=B_ORDER)
 	good_sigs = []
 	for col in df:
 		sig = df[col]
 
-		freqs, pows = signal.welch(sig, F_S, scaling='density', window='hamming')
+		freqs, pows = signal.welch(sig, F_S, scaling='density', window='hamming', nfft=8192, noverlap=None)
 
 		pows = normalize(pows.reshape(-1,1), norm='l2', axis=0).reshape(-1,)
 
@@ -211,72 +199,19 @@ def evaluate(paths, df=None, butter_band=True):
 	logging.debug('list with accepted signals created')
 	return good_sigs
 
-def psd_welch_freqs(paths):
-	from scipy import signal
-	from scipy.signal import find_peaks
+def process_signal(data):
 
-	df, names = read_simple(paths, return_df=True)
-	freqs_dict = {}
-	for col in df:
-		sig = df[col].values
-		freqs, pows = signal.welch(sig, F_S, scaling='density', window='hamming')
+	sig_bandpass = butter_bandpass_filter(data, lowcut, highcut, fs, order=4)
+	sig_cropped = crop_signal(sig_bandpass, window=300, intens_threshold=0.004, offset=250)
 
-		pows = normalize(pows.reshape(-1,1), norm='l2', axis=0).reshape(-1,)
-		threshold = 0.1
-		
-		peaks, _ = find_peaks(pows, height=threshold, distance=10)
-		peaks = [v for i,v in enumerate(peaks) if freqs[peaks][i] > 400]
+	sig_top_intens = pd.Series(np.abs(sig_cropped)).nlargest(3).tolist()
 
-		sub = pd.DataFrame(np.vstack((freqs[peaks], pows[peaks])).T, columns=['freqs','pows'])
-		peakseries = sub['pows'].nlargest(10)
+	freqs, p_amps, peaks = psd_process(sig_cropped, peak_thd=0.05, peak_dist=10, min_freq=400)
 
+	damping = damping_ratio(freqs, p_amps, peaks)
 
-		freqs_dict[col] = freqs[peaks].tolist()
-	return freqs_dict
-
-def psd_welch_pows(paths):
-	from scipy import signal
-	from scipy.signal import find_peaks
-
-	df, names = read_simple(paths, return_df=True)
-	pows_dict = {}
-	for col in df:
-		sig = df[col].values
-		freqs, pows = signal.welch(sig, F_S, scaling='density', window='hamming')
-
-		pows_dict[col] = pows	
-	
-	return pows_dict	
-
-def signal_amplitudes(paths, top_nr=3):
-
-	df, names = read_simple(paths, return_df=True)
-
-	top_ampls = {}
-	for col in df:
-		top_ampls[col] = np.abs(df[col]).nlargest(top_nr).tolist()
-	return top_ampls
-
-def damping_ratio(freqs, ampls, peaks):
-	fund_ampl = ampls[peaks[0]]
-	fund_freq = freqs[peaks[0]]
-
-	peak_a, peak_b = peaks[0], peaks[0]
-
-	while ampls[peak_a] > fund_ampl/2:
-		peak_a+=1
-	while ampls[peak_b] > fund_ampl/2:
-		peak_b-=1
-
-	omega_a, omega_b = freqs[peak_a], freqs[peak_b]
-	damping = (omega_a - omega_b) / (2*fund_freq)
-	return damping
-
-def damping_ratios(paths):
-	#// TODO: make this find freqs, pows, peaks and then damping ratio
-	df, names = read_simple(paths, return_df=True)
-
-	damps = {}
-	for col in df:
-		damps[col] = None
 	return None
+	#TODO: define/find through function/whatever ...the fundamental and harmonics...as well as
+	#		the top 3 PSD amplitudes.
+	# ALSO: crop PSD signal up to 2500
+	# LATER: PCA on covariance matrix, not correlation
