@@ -1,19 +1,22 @@
-from scipy.signal import butter, lfilter
 import pandas as pd
 import numpy as np
+import logging
 
+L_CUTOFF = 100.
+H_CUTOFF = 2500.
+F_S = 8000.
+B_ORDER = 4
 
-def butter_bandpass(lowcut, highcut, fs, order=4):
+def butter_bandpass_filter(data, lowcut, highcut, fs, order):
+	from scipy.signal import butter, lfilter
+
 	nyq = 0.5 * fs
 	low = lowcut / nyq
 	high = highcut / nyq
-	b,a = butter(order, [low, high], btype='band')
-	return b,a
 
-def butter_bandpass_filter(data, lowcut, highcut, fs, order=4):
-	b,a = butter_bandpass(lowcut, highcut, fs, order = order)
-	y = lfilter(b,a,data)
-	return y
+	b, a = butter(order, [low, high], btype='bandpass')
+	y = lfilter(b, a, data)
+	return y 
 
 def butter_dataframe(df, lowcut, highcut, fs, order=4):
 	for col in df:
@@ -21,18 +24,18 @@ def butter_dataframe(df, lowcut, highcut, fs, order=4):
 		df[col] = y
 	return df
 
-def crop_signal(data, window=300, intens_threshold=0.004, offset=250):
+def crop_signal(data, window=300, intens_threshold=0.0004, offset=250):
 	import more_itertools as mit
 
-	sig = df[col].values
-	sigseries = pd.Series(sig)
-	rolling_avg = np.abs(sigseries).rolling(window).mean()
-	rolling_avg_thd = rolling_avg[rolling_avg > intens_threshold]
+	sig = data
+	sigseries = pd.Series(sig.reshape(-1,)) # fixing peculiarities
+	rolling_avg = np.abs(sigseries).rolling(window).mean() # rolling average
+	rolling_avg_thd = rolling_avg[rolling_avg > intens_threshold] # values above threshold
 	if len(rolling_avg_thd):
 		iterable = rolling_avg_thd.index.tolist()
 		groups = [list(group) for group in mit.consecutive_groups(iterable)]
 		# Sizes of the groups
-		group_lens = pd.Series([len(ww[i]) for i in range(len(ww))])
+		group_lens = pd.Series([len(groups[i]) for i in range(len(groups))])
 		# Index of largest group
 		lrgst_group_idx = group_lens.idxmax()
 		# The first element of the largest group is where we start cropping
@@ -40,37 +43,88 @@ def crop_signal(data, window=300, intens_threshold=0.004, offset=250):
 		# The last element of the largest group is where we stop cropping
 		crop_end = groups[lrgst_group_idx][-1]
 
-		sig_cropped = sigseries.iloc[  crop_start -offset : crop_end[-1] - offset]
+		sig_cropped = sigseries.iloc[  crop_start -offset : crop_end - offset]
 		return sig_cropped
 	else:
+		logging.debug('No values above intensity threshold!')
 		return None
 
-def damping_ratio(freqs, ampls, peaks):
-	fund_ampl = ampls[peaks[0]]
-	fund_freq = freqs[peaks[0]]
+def psd_process(data, fs=F_S, scaling='density', window='hamming', nfft=8192, noverlap=None, crop_hz=2500):
+	from scipy import signal as sg
+	from scipy.signal import find_peaks
+	from sklearn.preprocessing import normalize
 
-	peak_a, peak_b = peaks[0], peaks[0]
-
-	while ampls[peak_a] > fund_ampl/2:
-		peak_a+=1
-	while ampls[peak_b] > fund_ampl/2:
-		peak_b-=1
-
-	omega_a, omega_b = freqs[peak_a], freqs[peak_b]
-	damping = (omega_a - omega_b) / (2*fund_freq)
-	return damping
-
-def psd_process(data, peak_thd=0.05, peak_dist=10, min_freq=400):
-	sig = data
 	# Calculating PSD
-	freqs, p_amps = signal.welch(sig, F_S, scaling='density', window='hamming', nfft=8192, noverlap=None)
+	freqs, p_amps = sg.welch(data, fs, scaling='density', window='hamming', nfft=8192, noverlap=None)
 	# Normalization of PSD amplitudes
 	p_amps = normalize(p_amps.reshape(-1,1), norm='l2', axis=0).reshape(-1,)
+	psd = pd.concat([pd.Series(freqs), pd.Series(p_amps)], axis=1)
+	# Cropping up to 2500 Hz (mosquitos don't have more)
+	psd = psd.iloc[:crop_hz,:]
+	psd.columns = ['frequency','pow_amp']
 
-	peaks, vals = find_peaks(p_amps, height=peak_thd, distance=peak_dist)
-	peaks = [v for i,v in enumerate(peaks) if freqs[peaks][i] > min_freq]
+	return psd
 
-	return freqs, p_amps, peaks
+def peak_finder(psd, min_freq=300.):
+	from scipy.signal import find_peaks
+	# Finding peaks in the whole PSD
+	peaks, vals = find_peaks(psd.pow_amp, height=0.03, distance=10)
+	peaks = [v for i,v in enumerate(peaks) if psd.frequency.iloc[peaks].iloc[i] > min_freq]
+	return peaks
+
+def get_harmonic(psd, peaks, h=1):
+	if len(peaks):
+		from scipy.signal import find_peaks
+		# Setting the fundamental frequency and the power amplitude
+		fund_fr = psd.frequency.iloc[peaks].iloc[0]
+		fund_amp = psd.pow_amp.iloc[peaks].iloc[0]
+		# Defining the range to search the harmonic in
+		har_range_idx = [fund_fr*(h+1)-100, fund_fr*(h+1)+100]
+		har_range = psd.frequency[(psd.frequency>har_range_idx[0]) & \
+								  (psd.frequency<har_range_idx[1])].index.tolist()
+		# Finding the same range in power amplitude and doing peak detection on it
+		har_powamp = psd.pow_amp.iloc[har_range]
+		har_fr = psd.frequency.iloc[har_range]
+		if len(har_powamp)<=1 and len(har_fr)<=1:
+			return np.nan, np.nan, np.nan
+		# Index for the peak
+		peak = find_peaks(har_powamp, distance=10)
+		if len(peak[0]):
+			peak = peak[0][0]
+		else:
+			return np.nan, np.nan, np.nan
+		# Given the index, return the amplitude and frequency
+		harmonic_pow = har_powamp.iloc[peak]
+		harmonic_fr = har_fr.iloc[peak]
+		harmonic_peak = har_fr.index[0]+ peak
+
+		return harmonic_pow, harmonic_fr, harmonic_peak
+	else:
+		return np.nan, np.nan, np.nan
+
+def damping_ratio(fund_freq, fund_amp, psd, peak_idx):
+	
+	if fund_freq is np.nan or fund_amp is np.nan:
+		return np.nan
+
+	peak_a, peak_b = peak_idx, peak_idx
+
+	while psd.pow_amp[peak_a] > fund_amp/2:
+		peak_a+=1
+		if peak_a >= 2499:
+			break
+		if peak_a-peak_idx > 50:
+			peak_a = peak_idx
+			break
+	while psd.pow_amp[peak_b] > fund_amp/2:
+		if peak_idx-peak_b > 50:
+			peak_b = peak_idx
+			break
+		peak_b-=1
+
+	omega_a, omega_b = psd.frequency.iloc[peak_a], psd.frequency.iloc[peak_b]
+	damping = (omega_a - omega_b) / (2*fund_freq)
+	return damping
 
 def tsfresh_transform(df):
 	all_subs = []

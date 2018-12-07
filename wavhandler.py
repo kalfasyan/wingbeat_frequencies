@@ -9,10 +9,7 @@ import logging
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
 
-L_CUTOFF = 100.
-H_CUTOFF = 2500.
-F_S = 8000.
-B_ORDER = 4
+
 
 class WavHandler(object):
 	""" """
@@ -70,43 +67,7 @@ class WavHandler(object):
 			self.df_signals = pd.DataFrame(datamatrix, columns=[names[i].split('/')[-1][:-4] for i in range(datamatrix.shape[1])])
 			logging.debug('df_signals created')
 
-	def preprocess(self, butter_bandpass=True):
-		"""
-		Preprocesses the signal.
-		If butter_bandpass is True, then it applies a Buttersworth band-pass filter with global variable settings.
-		"""
-		if not len(self.df_signals):
-			raise ValueError('No df_signals. Read the wav files first!')
-		if butter_bandpass:
-			self.df_signals = butter_dataframe(self.df_signals, L_CUTOFF, H_CUTOFF, F_S, order=B_ORDER)
-			logging.debug('Buttersworth bandpass filter applied, [{}, {}, {}, order={}]'.format(L_CUTOFF, H_CUTOFF, F_S,order=B_ORDER))
-			self.preprocessed = True # Flag to check at filter_accepted_signals if the signals have been preprocessed
-		else:
-			return None
-
-	def filter_accepted_signals(self):
-		"""
-		Filters the signals according to the evaluation performed in evaluate function.
-		"""
-		from scipy import signal
-		from scipy.signal import find_peaks
-
-		if not len(self.df_signals):
-			raise ValueError('No df_signals. Read the wav files first!')
-		if not hasattr(self, 'preprocessed'):
-			raise ValueError('You have not preprocessed the data')
-
-		if isinstance(self.df_signals, pd.DataFrame) and not self.df_signals.empty:
-			# accepted_signals will be a list of the signal filenames that passed the evaluation
-			self.accepted_signals = evaluate(self.wav_filenames, self.df_signals)
-			# we select the accepted signals for the df_signals dataframe
-			self.df_signals = self.df_signals[self.accepted_signals]
-			logging.debug('df_signals filtered')
-			logging.debug('accepted_signals created')
-		else:
-			raise ValueError('Not a DataFrame or empty DataFrame!')
-
-	def crop(self, window=500):
+	def preprocess(self):
 		"""
 		Crops the signals using a rolling mean with a specified window as the number of values 
 		in the abs(signal) to calculate the mean for. If window=500, then the moving average uses 
@@ -116,15 +77,14 @@ class WavHandler(object):
 		if not len(self.df_signals):
 			raise ValueError('No df_signals. Read the wav files first!')
 
-		new_df = pd.DataFrame()
+		df_processed = pd.DataFrame()
 		for col in self.df_signals:
-			sigseries = self.df_signals[col]
-			rolling_mean = np.abs(sigseries).rolling(window).mean()
-			cropped_signal = sigseries.iloc[rolling_mean.idxmax()+1-window:rolling_mean.idxmax()+1]
-			new_df[col] = cropped_signal.values
-		self.df_cropped = new_df
-		logging.debug('df_cropped created')
-
+			sig = self.df_signals[col]
+			sig = butter_bandpass_filter(data=sig, lowcut=L_CUTOFF, highcut=H_CUTOFF, fs=F_S, order=B_ORDER)
+			sig = crop_signal(sig, window=300, intens_threshold=0.0004, offset=200)			
+			df_processed[col] = sig
+		self.df_signals = df_processed
+		logging.debug('df_signals processed')
 
 def read_simple(paths, return_df=False):
 	"""
@@ -153,65 +113,54 @@ def read_simple(paths, return_df=False):
 	else:
 		return datamatrix, names
 
-def preprocess_simple(df, bandpass=True, crop=True):
+def process_signal(fname, data, plot=False):
 
-	if bandpass:
-		df = butter_dataframe(df, L_CUTOFF, H_CUTOFF, F_S, order=B_ORDER)
-	if crop:
-		df = crop_df(df, window=300, intens_threshold=0.004, offset=250)
-	return df
+	specs = {}
+	results = {
+		'intens0': np.nan, 
+		'intens1': np.nan, 
+		'intens2': np.nan,
+		'pow0': np.nan, 
+		'pow1': np.nan, 
+		'pow2': np.nan, 
+		'fr0': np.nan, 
+		'fr1': np.nan, 
+		'fr2': np.nan,
+		'damping_0': np.nan, 
+		'damping_1': np.nan, 
+		'damping_2': np.nan,
+	}
 
-def evaluate(df):
-	"""
-	Evaluation function for wav signals given their paths.
-	"""
-	from scipy import signal
-	from scipy.signal import find_peaks
-	from sklearn.preprocessing import normalize
+	sig_bandpass = butter_bandpass_filter(data=data, lowcut=L_CUTOFF, highcut=H_CUTOFF, fs=F_S, order=B_ORDER)
+	sig_cropped = crop_signal(sig_bandpass, window=300, intens_threshold=0.0004, offset=200)
 
-	good_sigs = []
-	for col in df:
-		sig = df[col]
-
-		freqs, pows = signal.welch(sig, F_S, scaling='density', window='hamming', nfft=8192, noverlap=None)
-
-		pows = normalize(pows.reshape(-1,1), norm='l2', axis=0).reshape(-1,)
-
-		threshold = 0.1
-		peaks, vals = find_peaks(pows, height=threshold, distance=10)
-		peaks = [v for i,v in enumerate(peaks) if freqs[peaks][i] > 400]
-
-		damping = damping_ratio(freqs, pows, peaks)
-
-		sub = pd.DataFrame(np.vstack((freqs[peaks], pows[peaks])).T, columns=['freqs','pows'])
-		peakseries = sub['pows'].nlargest(10)
-
-		if peakseries.shape[0] == 2:
-			condition = (peakseries.iloc[0] > threshold or peakseries.iloc[1] > threshold)
-		elif peakseries.shape[0] > 2:
-			condition = (peakseries.iloc[0] > threshold or peakseries.iloc[1] > threshold) and \
-					(peakseries.loc[0] > peakseries.loc[2]) and \
-					(peakseries.loc[1] > peakseries.loc[2])
-		else:
-			condition = False
-		if condition:
-			good_sigs.append(col)
-	logging.debug('list with accepted signals created')
-	return good_sigs
-
-def process_signal(data):
-
-	sig_bandpass = butter_bandpass_filter(data, lowcut, highcut, fs, order=4)
-	sig_cropped = crop_signal(sig_bandpass, window=300, intens_threshold=0.004, offset=250)
+	if sig_cropped is not None:
+		specs[fname] = results
+		return specs
 
 	sig_top_intens = pd.Series(np.abs(sig_cropped)).nlargest(3).tolist()
+	results['intens0'], results['intens1'], results['intens2'] = sig_top_intens[0], sig_top_intens[1], sig_top_intens[2]
 
-	freqs, p_amps, peaks = psd_process(sig_cropped, peak_thd=0.05, peak_dist=10, min_freq=400)
+	psd = psd_process(sig_cropped, fs=F_S, scaling='density', window='hamming', nfft=8192, noverlap=None, crop_hz=2500)
+	peaks = peak_finder(psd, min_freq=300.)
+	results['pow0'], results['fr0'], results['peak0'] = get_harmonic(psd, peaks, h=0)
+	results['pow1'], results['fr1'], results['peak1'] = get_harmonic(psd, peaks, h=1)
+	results['pow2'], results['fr2'], results['peak2'] = get_harmonic(psd, peaks, h=2)
 
-	damping = damping_ratio(freqs, p_amps, peaks)
+	results['damping_0'] = damping_ratio(fund_freq=results['fr0'], fund_amp=results['pow0'], psd=psd, peak_idx=results['peak0'])
+	results['damping_1'] = damping_ratio(fund_freq=results['fr1'], fund_amp=results['pow1'], psd=psd, peak_idx=results['peak1'])
+	results['damping_2'] = damping_ratio(fund_freq=results['fr2'], fund_amp=results['pow2'], psd=psd, peak_idx=results['peak2'])
 
-	return None
-	#TODO: define/find through function/whatever ...the fundamental and harmonics...as well as
+	if plot:
+		import matplotlib.pyplot as plt
+		plt.figure(figsize=(24,6))
+		plt.subplot(3,1,1); plt.plot(data); plt.title('raw')
+		plt.subplot(3,1,2); plt.plot(sig_bandpass); plt.title('bandpassed')
+		plt.subplot(3,1,3); plt.plot(psd.frequency, psd.pow_amp); plt.title('psd')
+
+	specs[fname] = results
+	return specs
+	#[x]TODO: define/find through function/whatever ...the fundamental and harmonics...as well as
 	#		the top 3 PSD amplitudes.
-	# ALSO: crop PSD signal up to 2500
-	# LATER: PCA on covariance matrix, not correlation
+	#[x] ALSO: crop PSD signal up to 2500
+	#[ ] LATER: PCA on covariance matrix, not correlation
