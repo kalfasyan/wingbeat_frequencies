@@ -31,7 +31,7 @@ def crop_signal(data, window=300, intens_threshold=0.0004, offset=250):
 	sigseries = pd.Series(sig.reshape(-1,)) # fixing peculiarities
 	rolling_avg = np.abs(sigseries).rolling(window).mean() # rolling average
 	rolling_avg_thd = rolling_avg[rolling_avg > intens_threshold] # values above threshold
-	if len(rolling_avg_thd):
+	if len(rolling_avg_thd) > 256:
 		iterable = rolling_avg_thd.index.tolist()
 		groups = [list(group) for group in mit.consecutive_groups(iterable)]
 		# Sizes of the groups
@@ -49,13 +49,13 @@ def crop_signal(data, window=300, intens_threshold=0.0004, offset=250):
 		logging.debug('No values above intensity threshold!')
 		return None
 
-def psd_process(data, fs=F_S, scaling='density', window='hamming', nfft=8192, noverlap=None, crop_hz=2500):
+def psd_process(data, fs=F_S, scaling='density', window='hamming', nfft=None, noverlap=None, nperseg=None, crop_hz=2500):
 	from scipy import signal as sg
 	from scipy.signal import find_peaks
 	from sklearn.preprocessing import normalize
 
 	# Calculating PSD
-	freqs, p_amps = sg.welch(data, fs, scaling='density', window='hamming', nfft=8192, noverlap=None)
+	freqs, p_amps = sg.welch(data, fs=fs, scaling=scaling, window=window, nfft=nfft, nperseg=nperseg, noverlap=noverlap)
 	# Normalization of PSD amplitudes
 	p_amps = normalize(p_amps.reshape(-1,1), norm='l2', axis=0).reshape(-1,)
 	psd = pd.concat([pd.Series(freqs), pd.Series(p_amps)], axis=1)
@@ -129,9 +129,11 @@ def damping_ratio(fund_freq, fund_amp, psd, peak_idx):
 def tsfresh_transform(df):
 	all_subs = []
 	for i,col in enumerate(df):
-		col_dict = {'ts_signal': df[col].values,
-					'time': range(0, df[col].shape[0]),
-					'id': i}
+		sig = df[col].dropna()
+		col_dict = {'ts_signal': sig.values,
+					'time': range(0, sig.shape[0]),
+					'id': i,
+					}
 		all_subs.append(pd.DataFrame(col_dict))
 
 	return pd.concat(all_subs, axis=0)
@@ -159,7 +161,7 @@ def create_classifier(name):
 		classifier = KNeighborsClassifier(n_neighbors = 14, metric = 'minkowski', p = 2)
 	elif name == 'rf':
 		from sklearn.ensemble import RandomForestClassifier
-		classifier = RandomForestClassifier(n_estimators = 400, criterion = 'gini', random_state = 0)#, class_weight='balanced')
+		classifier = RandomForestClassifier(n_estimators = 100, n_jobs=-1, criterion = 'gini', random_state = 0)#, class_weight='balanced')
 	elif name == 'svm':
 		from sklearn.svm import SVC
 		classifier = SVC(kernel='linear', random_state = 0)
@@ -171,7 +173,7 @@ def create_classifier(name):
 		classifier = ExtraTreesClassifier(n_estimators=80, random_state=0)
 	elif name == 'xgboost':
 		from xgboost import XGBClassifier
-		classifier = XGBClassifier(n_estimators=400, n_jobs=-1, random_state=0)
+		classifier = XGBClassifier(n_estimators=325, n_jobs=-1, random_state=0)
 	elif name == 'adaboost':
 		from sklearn.ensemble import AdaBoostClassifier
 		from sklearn.tree import DecisionTreeClassifier

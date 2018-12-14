@@ -113,13 +113,25 @@ def read_simple(paths, return_df=False):
 	else:
 		return datamatrix, names
 
+def get_psd(fname, data, plot=False):
+
+    sig_bandpass = butter_bandpass_filter(data=data, lowcut=L_CUTOFF, highcut=H_CUTOFF, fs=F_S, order=B_ORDER)
+    sig_cropped = crop_signal(sig_bandpass, window=300, intens_threshold=0.0004, offset=200)
+
+    if sig_cropped is None or sig_cropped.empty:
+        return pd.Series(np.ones(2500,)*np.nan)
+
+    psd = psd_process(sig_cropped, fs=F_S, scaling='density', window='hamming', nfft=8192, noverlap=None, crop_hz=2500)
+    psd[fname] = psd.pow_amp
+    return psd[fname]
+
 def process_signal(fname, data, plot=False):
 
 	specs = {}
 	results = {
-		'intens0': np.nan, 
-		'intens1': np.nan, 
-		'intens2': np.nan,
+#		'intens0': np.nan, 
+#		'intens1': np.nan, 
+#		'intens2': np.nan,
 		'pow0': np.nan, 
 		'pow1': np.nan, 
 		'pow2': np.nan, 
@@ -134,22 +146,23 @@ def process_signal(fname, data, plot=False):
 	sig_bandpass = butter_bandpass_filter(data=data, lowcut=L_CUTOFF, highcut=H_CUTOFF, fs=F_S, order=B_ORDER)
 	sig_cropped = crop_signal(sig_bandpass, window=300, intens_threshold=0.0004, offset=200)
 
-	if sig_cropped is not None:
+	if sig_cropped is None or sig_cropped.empty:
 		specs[fname] = results
 		return specs
 
-	sig_top_intens = pd.Series(np.abs(sig_cropped)).nlargest(3).tolist()
-	results['intens0'], results['intens1'], results['intens2'] = sig_top_intens[0], sig_top_intens[1], sig_top_intens[2]
+#	sig_top_intens = pd.Series(np.abs(sig_cropped)).nlargest(3).tolist()
+#	results['intens0'], results['intens1'], results['intens2'] = sig_top_intens[0], sig_top_intens[1], sig_top_intens[2]
 
 	psd = psd_process(sig_cropped, fs=F_S, scaling='density', window='hamming', nfft=8192, noverlap=None, crop_hz=2500)
 	peaks = peak_finder(psd, min_freq=300.)
-	results['pow0'], results['fr0'], results['peak0'] = get_harmonic(psd, peaks, h=0)
-	results['pow1'], results['fr1'], results['peak1'] = get_harmonic(psd, peaks, h=1)
-	results['pow2'], results['fr2'], results['peak2'] = get_harmonic(psd, peaks, h=2)
+	results['pow0'], results['fr0'], peak0 = get_harmonic(psd, peaks, h=0)
+	results['pow1'], results['fr1'], peak1 = get_harmonic(psd, peaks, h=1)
+	results['pow2'], results['fr2'], peak2 = get_harmonic(psd, peaks, h=2)
 
-	results['damping_0'] = damping_ratio(fund_freq=results['fr0'], fund_amp=results['pow0'], psd=psd, peak_idx=results['peak0'])
-	results['damping_1'] = damping_ratio(fund_freq=results['fr1'], fund_amp=results['pow1'], psd=psd, peak_idx=results['peak1'])
-	results['damping_2'] = damping_ratio(fund_freq=results['fr2'], fund_amp=results['pow2'], psd=psd, peak_idx=results['peak2'])
+	# TODO: make this pass a dictionary only with a string.format for the 0/1/2
+	results['damping_0'] = damping_ratio(fund_freq=results['fr0'], fund_amp=results['pow0'], psd=psd, peak_idx=peak0)
+	results['damping_1'] = damping_ratio(fund_freq=results['fr1'], fund_amp=results['pow1'], psd=psd, peak_idx=peak1)
+	results['damping_2'] = damping_ratio(fund_freq=results['fr2'], fund_amp=results['pow2'], psd=psd, peak_idx=peak2)
 
 	if plot:
 		import matplotlib.pyplot as plt
@@ -163,4 +176,5 @@ def process_signal(fname, data, plot=False):
 	#[x]TODO: define/find through function/whatever ...the fundamental and harmonics...as well as
 	#		the top 3 PSD amplitudes.
 	#[x] ALSO: crop PSD signal up to 2500
-	#[ ] LATER: PCA on covariance matrix, not correlation
+	#[ ] ALSO: Check how to correct the userwarning in nperseg = 156 is greater than input length (perhaps save the input length)
+	#[ ] LATER: PCA on covariance matrix, not correlation. Set 'with_std'=False in StandardScaler
