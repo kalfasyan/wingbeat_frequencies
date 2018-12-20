@@ -14,7 +14,7 @@ class WavHandler(object):
     def __init__(self, directory, sample_size=-1, recursive=False, nat_sort=True):
         """
         :param directory: the directory where the wav files are.
-        :param sample_size: this refers to how many wav file to keep (randomly samples) 
+        :param sample_size: this refers to how many wav file to keep (randomly samples)
 
         """
         super(WavHandler, self).__init__()
@@ -62,30 +62,74 @@ def read_simple(paths, return_df=False):
     logging.debug('names list created')
 
     if return_df:
-        datamatrix = pd.DataFrame(datamatrix, 
+        datamatrix = pd.DataFrame(datamatrix,
                       columns=[names[i].split('/')[-1][:-4] for i in range(datamatrix.shape[1])])
         return datamatrix, names
     else:
         return datamatrix, names
 
+def read_simple_parallel(path):
+    import soundfile as sf
+    wavname = path
+    fname = path.split('/')[-1][:-4]
+    wavdata, fs = sf.read(path)
+    wavseries = pd.Series(wavdata)
+    wavseries.name = fname
+    return wavseries
+
+def power_spectral_density(data=None, fname=None, only_powers=False,crop=False):
+    # Buttersworth bandpass filter
+    sig = butter_bandpass_filter(data=data, lowcut=L_CUTOFF, highcut=H_CUTOFF, fs=F_S, order=B_ORDER)
+    if crop: # Perform cropping
+        sig = crop_signal(sig, window=300, intens_threshold=0.0004, offset=200)
+        if sig is None or sig.empty or sig.shape[0] < 256:
+            logging.warning('Signal is None, empty or too small after cropping!')
+            return None
+
+    psd = psd_process(sig, fs=F_S, scaling='density', window='hamming', nperseg=256, noverlap=128+64)#, crop_hz=2500)
+    return psd.pow_amp if only_powers else psd
+
+def power_spectral_density_parallel(path):
+    data, _ = read_simple([path])
+    fname = path.split('/')[-1][:-4]
+    psd_pow_amps = power_spectral_density(data=data.flatten(), fname=fname, only_powers=True, crop=False)
+    psd_pow_amps.name = fname
+    return psd_pow_amps
+
+def make_df_parallel(df, setting=None, insect_class=None, sample_size=500):
+    import multiprocessing
+    cpus = multiprocessing.cpu_count()
+    names = df[df.label1==insect_class].names.tolist()
+    names = random.sample(names, sample_size)
+    pool = multiprocessing.Pool(processes=cpus)
+    result_list = []
+    if setting == 'psd':
+        result_list.append(pool.map(power_spectral_density_parallel, names))
+    elif setting == 'read':
+        result_list.append(pool.map(read_simple_parallel, names))
+    else:
+        logging.error('Wrong setting!')
+    df = pd.concat(result_list[0], axis=1, sort=False)
+    return df
+
 def process_signal(data=None, fname=None, plot=False):
     specs = {}
     results = {
-        'pow0': np.nan, 
-        'pow1': np.nan, 
-        'pow2': np.nan, 
-        'fr0': np.nan, 
-        'fr1': np.nan, 
+        'pow0': np.nan,
+        'pow1': np.nan,
+        'pow2': np.nan,
+        'fr0': np.nan,
+        'fr1': np.nan,
         'fr2': np.nan,
-        'damping_0': np.nan, 
-        'damping_1': np.nan, 
+        'damping_0': np.nan,
+        'damping_1': np.nan,
         'damping_2': np.nan,
     }
     # Calculate the power spectral density
     psd = power_spectral_density(data=data, fname=None, only_powers=False,crop=False)
     if psd is None:
         specs[fname] = results
-        return specs    
+        return specs
 
     peaks = peak_finder(psd, min_freq=300.)
     results['pow0'], results['fr0'], peak0 = get_harmonic(psd, peaks, h=0)
@@ -106,47 +150,3 @@ def process_signal(data=None, fname=None, plot=False):
 
     specs[fname] = results
     return specs
-
-def power_spectral_density(data=None, fname=None, only_powers=False,crop=False):
-    # Buttersworth bandpass filter
-    sig = butter_bandpass_filter(data=data, lowcut=L_CUTOFF, highcut=H_CUTOFF, fs=F_S, order=B_ORDER)
-    if crop: # Perform cropping
-        sig = crop_signal(sig, window=300, intens_threshold=0.0004, offset=200)
-        if sig is None or sig.empty or sig.shape[0] < 256:
-            logging.warning('Signal is None, empty or too small after cropping!')
-            return None
-
-    psd = psd_process(sig, fs=F_S, scaling='density', window='hamming', nperseg=256, noverlap=128+64)#, crop_hz=2500)
-    return psd.pow_amp if only_powers else psd
-
-def make_df_parallel(df, setting=None, insect_class='Culex', sample_size=500):
-    import multiprocessing
-    cpus = multiprocessing.cpu_count()
-    names = df[df.label1==insect_class].names.tolist()
-    names = random.sample(names, sample_size)
-    pool = multiprocessing.Pool(processes=cpus)
-    result_list = []
-    if setting == 'psd':
-        result_list.append(pool.map(get_psd_parallel, names))
-    elif setting == 'read':
-        result_list.append(pool.map(read_simple_parallel, names))
-    else:
-        logging.error('Wrong setting!')
-    df = pd.concat(result_list[0], axis=1, sort=False)    
-    return df
-
-def get_psd_parallel(path):
-    data, _ = read_simple([path])
-    fname = path.split('/')[-1][:-4]
-    psd_pow_amps = power_spectral_density(data=data.flatten(), fname=fname, only_powers=True, crop=False)
-    psd_pow_amps.name = fname
-    return psd_pow_amps
-
-def read_simple_parallel(path):
-    import soundfile as sf
-    wavname = path
-    fname = path.split('/')[-1][:-4]
-    wavdata, fs = sf.read(path)
-    wavseries = pd.Series(wavdata)
-    wavseries.name = fname
-    return wavseries
