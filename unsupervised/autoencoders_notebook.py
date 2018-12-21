@@ -1,14 +1,13 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[146]:
-#get_ipython().run_line_magic('reset', '-f')
-from keras.layers import Input, Dense
+from keras.layers import Input, Dense, Conv1D, MaxPooling1D, UpSampling1D, Flatten, Reshape
 from keras.models import Model
+from keras import backend as K
 
-
-# In[147]:
-
+import numpy as np
+import pandas as pd
+from sklearn.utils import shuffle
 
 # # this is the size of our encoded representations
 # encoding_dim = 16  # 32 floats -> compression of factor 24.5, assuming the input is 784 floats
@@ -31,14 +30,6 @@ from keras.models import Model
 # # create the decoder model
 # decoder = Model(encoded_input, decoder_layer(encoded_input))
 # autoencoder.compile(optimizer='adadelta', loss='binary_crossentropy')
-
-
-# In[220]:
-
-
-from keras.layers import Input, Dense, Conv1D, MaxPooling1D, UpSampling1D, Flatten, Reshape
-from keras.models import Model
-from keras import backend as K
 
 input_img = Input(shape=(129,1))  # adapt this if using `channels_first` image data format
 
@@ -68,13 +59,6 @@ autoencoder.compile(optimizer='adam', loss='binary_crossentropy')
 autoencoder.summary()
 
 
-# In[221]:
-
-
-import numpy as np
-import pandas as pd
-from sklearn.utils import shuffle
-
 df = pd.read_csv('../data/mosquitos_test.csv', index_col=0)
 X = shuffle(df.values, random_state=3).astype('float32')
 x_train, x_test = X[:50000,:], X[50000:,:]
@@ -87,13 +71,8 @@ x_test = np.reshape(x_test, (len(x_test), 129, 1))
 print(x_train.shape)
 print(x_test.shape)
 
-
-# In[ ]:
-
-
-
 autoencoder.fit(x_train, x_train,
-                epochs=50,
+                epochs=100,
                 batch_size=16,
                 shuffle=True,
                 validation_data=(x_test, x_test))
@@ -103,10 +82,12 @@ autoencoder.fit(x_train, x_train,
 encoded_imgs = encoder.predict(x_test)
 decoded_imgs = decoder.predict(encoded_imgs)
 
+import pickle
+pickle.dump(encoder, open("../data/encoder.pickle.dat", "wb"))
+pickle.dump(decoder, open("../data/decoder.pickle.dat", "wb"))
+pickle.dump(autoencoder, open("../data/autoencoder.pickle.dat", "wb"))
 
-# In[ ]:
-
-
+"""
 # use Matplotlib (don't ask)
 import matplotlib.pyplot as plt
 
@@ -127,63 +108,4 @@ for i in range(n):
     ax.get_xaxis().set_visible(False)
     ax.get_yaxis().set_visible(False)
 plt.show()
-
-
-# In[ ]:
-
-
-
-
-
-# In[ ]:
-
-
-
-
-
-# In[ ]:
-
-
-# 0.0469 loss with bs=128 and encoding_dim=15
-
-
-# In[ ]:
-
-
-
-
-
-# In[ ]:
-
-
-
-
-
-# In[ ]:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# In[ ]:
+"""
