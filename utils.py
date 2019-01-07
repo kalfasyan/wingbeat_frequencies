@@ -2,8 +2,8 @@ import pandas as pd
 import numpy as np
 import logging
 
-L_CUTOFF = 100.
-H_CUTOFF = 2500.
+L_CUTOFF = 200.
+H_CUTOFF = 3600.
 F_S = 8000.
 B_ORDER = 4
 
@@ -16,7 +16,7 @@ def butter_bandpass_filter(data, lowcut, highcut, fs, order):
 
 	b, a = butter(order, [low, high], btype='bandpass')
 	y = lfilter(b, a, data)
-	return y 
+	return y
 
 def butter_dataframe(df, lowcut, highcut, fs, order=4):
 	for col in df:
@@ -103,7 +103,7 @@ def get_harmonic(psd, peaks, h=1):
 		return np.nan, np.nan, np.nan
 
 def damping_ratio(fund_freq, fund_amp, psd, peak_idx):
-	
+
 	if fund_freq is np.nan or fund_amp is np.nan:
 		return np.nan
 
@@ -141,8 +141,8 @@ def tsfresh_transform(df):
 def make_tsfresh_settings(samples=300, feature_importances='feature_importances_v1.csv'):
 	import tsfresh
 	"""Having extracted initially the feature importances from a RF classifier that was trained
-		using a number of 'samples', we can run this function to extract a tsfresh dictionary, 
-		which we can pass so that the feature extraction takes less time, since it will use only 
+		using a number of 'samples', we can run this function to extract a tsfresh dictionary,
+		which we can pass so that the feature extraction takes less time, since it will use only
 		the important features from the past training """
 	df = pd.read_pickle('combined_{}.pkl'.format(samples))
 	featlist = pd.read_csv(feature_importances)
@@ -156,7 +156,7 @@ def create_classifier(name):
 	if name == 'logreg':
 		from sklearn.linear_model import LogisticRegression
 		classifier = LogisticRegression(random_state = 0, multi_class='auto', solver='lbfgs', max_iter=2000)
-	elif name == 'knn': 
+	elif name == 'knn':
 		from sklearn.neighbors import KNeighborsClassifier
 		classifier = KNeighborsClassifier(n_neighbors = 14, metric = 'minkowski', p = 2)
 	elif name == 'rf':
@@ -189,4 +189,3 @@ def create_classifier(name):
 	else:
 		raise ValueError('Wrong Classifier name given!')
 	return classifier
-

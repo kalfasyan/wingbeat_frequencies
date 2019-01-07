@@ -79,14 +79,14 @@ def read_simple_parallel(path):
 
 def power_spectral_density(data=None, fname=None, only_powers=False,crop=False):
     # Buttersworth bandpass filter
-    sig = butter_bandpass_filter(data=data, lowcut=L_CUTOFF, highcut=H_CUTOFF, fs=F_S, order=B_ORDER)
+    sig = butter_bandpass_filter(data=data.flatten(), lowcut=L_CUTOFF, highcut=H_CUTOFF, fs=F_S, order=B_ORDER)
     if crop: # Perform cropping
         sig = crop_signal(sig, window=300, intens_threshold=0.0004, offset=200)
         if sig is None or sig.empty or sig.shape[0] < 256:
             logging.warning('Signal is None, empty or too small after cropping!')
             return None
 
-    psd = psd_process(sig, fs=F_S, scaling='density', window='hamming', nperseg=256, noverlap=128+64)#, crop_hz=2500)
+    psd = psd_process(sig, fs=F_S, scaling='density', window='hamming', nfft=8192, nperseg=256, noverlap=128+64)#, crop_hz=2500)
     return psd.pow_amp if only_powers else psd
 
 def power_spectral_density_parallel(path):
