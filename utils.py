@@ -49,7 +49,7 @@ def crop_signal(data, window=300, intens_threshold=0.0004, offset=250):
 		logging.debug('No values above intensity threshold!')
 		return None
 
-def psd_process(data, fs=F_S, scaling='density', window='hamming', nfft=None, noverlap=None, nperseg=None, crop_hz=2500):
+def psd_process(data, fs=F_S, scaling='density', window='hamming', nfft=None, noverlap=None, nperseg=None):#, crop_hz=H_CUTOFF):
 	from scipy import signal as sg
 	from scipy.signal import find_peaks
 	from sklearn.preprocessing import normalize
@@ -60,7 +60,7 @@ def psd_process(data, fs=F_S, scaling='density', window='hamming', nfft=None, no
 	p_amps = normalize(p_amps.reshape(-1,1), norm='l2', axis=0).reshape(-1,)
 	psd = pd.concat([pd.Series(freqs), pd.Series(p_amps)], axis=1)
 	# Cropping up to 2500 Hz (mosquitos don't have more)
-	psd = psd.iloc[:crop_hz,:]
+	# psd = psd.iloc[:crop_hz,:]
 	psd.columns = ['frequency','pow_amp']
 
 	return psd

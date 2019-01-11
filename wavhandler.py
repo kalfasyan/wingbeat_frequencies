@@ -15,7 +15,6 @@ class WavHandler(object):
         """
         :param directory: the directory where the wav files are.
         :param sample_size: this refers to how many wav file to keep (randomly samples)
-
         """
         super(WavHandler, self).__init__()
         self.directory = directory
@@ -86,7 +85,7 @@ def power_spectral_density(data=None, fname=None, only_powers=False,crop=False):
             logging.warning('Signal is None, empty or too small after cropping!')
             return None
 
-    psd = psd_process(sig, fs=F_S, scaling='density', window='hamming', nfft=8192, nperseg=256, noverlap=128+64)#, crop_hz=2500)
+    psd = psd_process(sig, fs=F_S, scaling='density', window='hamming', nfft=8192, noverlap=None)#nperseg=256, noverlap=128+64)#, crop_hz=2500)
     return psd.pow_amp if only_powers else psd
 
 def power_spectral_density_parallel(path):
