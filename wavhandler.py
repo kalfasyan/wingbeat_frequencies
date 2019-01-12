@@ -6,6 +6,7 @@ import random
 from utils import *
 import logging
 
+
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
 
@@ -40,6 +41,65 @@ class WavHandler(object):
         if len(self.wav_filenames) == 0: # raising error if nothing is returned.
             raise ValueError('No filenames retrieved!')
 
+all_6 = ['Ae. aegypti', 'Ae. albopictus', 'An. gambiae', 'An. arabiensis', 'C. pipiens', 'C. quinquefasciatus']
+
+def get_data(target_names=all_6, nr_signals=20000, only_names=True, verbose=0):
+    import os
+    import soundfile as sf
+    from tqdm import tqdm
+    # Read about 'nr_signals' of recs from every species
+    # Note: All wav files must be the same sampling frequency and number of datapoints!
+
+    X = []                    # holds all data
+    y = []                    # holds all class labels
+
+    filenames = []            # holds all the file names
+    target_count = []         # holds the counts in a class
+
+    for i, target in enumerate(tqdm(target_names)):
+        target_count.append(0)  # initialize target count
+        path='/home/kalfasyan/data/insects/Wingbeats/' + target + '/'    # assemble path string
+
+        for [root, dirs, files] in os.walk(path, topdown=False):
+            for filename in files:
+                name,ext = os.path.splitext(filename)
+                if ext=='.wav':
+                    name=os.path.join(root, filename)
+                    if not only_names:
+                        data, fs = sf.read(name)
+                        X.append(data)
+                    y.append(i)
+                    filenames.append(name)
+                    target_count[i]+=1
+                    if target_count[i]>nr_signals:
+                        break
+        if verbose:
+            print (target,'#recs = ', target_count[i])
+
+    if not only_names:
+        X = np.vstack(X)
+        y = np.hstack(y)
+
+        X = X.astype("float32")
+        if verbose:
+            print ("")
+            print ("Total dataset size:")
+            print ('# of classes: %d' % len(np.unique(y)))
+            print ('total dataset size: %d' % X.shape[0])
+            print ('Sampling frequency = %d Hz' % fs)
+            print ("n_samples: %d" % X.shape[1])
+            print ("duration (sec): %f" % (X.shape[1]/fs))
+
+    return (X, y) if not only_names else filenames, y
+
+def transform_data(X):
+    from scipy import signal
+    from tqdm import tqdm
+    # transform the data
+    XX = np.zeros((X.shape[0],129)).astype("float32")   # allocate space
+    for i in tqdm(range(X.shape[0])):
+        XX[i] = 10*np.log10(signal.welch(X[i], fs=F_S, window='hanning', nperseg=256, noverlap=128+64)[1])
+    return XX
 
 def read_simple(paths, return_df=False):
     """
