@@ -42,6 +42,8 @@ class WavHandler(object):
             raise ValueError('No filenames retrieved!')
 
 all_6 = ['Ae. aegypti', 'Ae. albopictus', 'An. gambiae', 'An. arabiensis', 'C. pipiens', 'C. quinquefasciatus']
+mosquitos_6 = ['Ae. aegypti', 'Ae. albopictus', 'An. gambiae', 'An. arabiensis', 'C. pipiens', 'C. quinquefasciatus']
+dros_zapr = ['LG_drosophila_10_09', 'LG_zapr_26_09']
 
 def get_data(target_names=all_6, nr_signals=20000, only_names=True, verbose=0):
     import os
@@ -90,7 +92,7 @@ def get_data(target_names=all_6, nr_signals=20000, only_names=True, verbose=0):
             print ("n_samples: %d" % X.shape[1])
             print ("duration (sec): %f" % (X.shape[1]/fs))
 
-    return (X, y) if not only_names else filenames, y
+    return (X, y) if not only_names else (filenames, y)
 
 def transform_data(X):
     from scipy import signal
@@ -98,7 +100,8 @@ def transform_data(X):
     # transform the data
     XX = np.zeros((X.shape[0],129)).astype("float32")   # allocate space
     for i in tqdm(range(X.shape[0])):
-        XX[i] = 10*np.log10(signal.welch(X[i], fs=F_S, window='hanning', nperseg=256, noverlap=128+64)[1])
+        # XX[i] = 10*np.log10(signal.welch(X[i], fs=F_S, window='hanning', nperseg=256, noverlap=128+64)[1])
+        XX[i] = power_spectral_density(X[i], only_powers=True)
     return XX
 
 def read_simple(paths, return_df=False):
@@ -145,7 +148,7 @@ def power_spectral_density(data=None, fname=None, only_powers=False,crop=False):
             logging.warning('Signal is None, empty or too small after cropping!')
             return None
 
-    psd = psd_process(sig, fs=F_S, scaling='density', window='hamming', nfft=8192, noverlap=None)#nperseg=256, noverlap=128+64)#, crop_hz=2500)
+    psd = psd_process(sig, fs=F_S, scaling='density', window='hanning', nperseg=256, noverlap=128+64)#, crop_hz=2500)
     return psd.pow_amp if only_powers else psd
 
 def power_spectral_density_parallel(path):
@@ -155,11 +158,9 @@ def power_spectral_density_parallel(path):
     psd_pow_amps.name = fname
     return psd_pow_amps
 
-def make_df_parallel(df, setting=None, insect_class=None, sample_size=500):
+def make_df_parallel(df, setting=None, names=None):
     import multiprocessing
     cpus = multiprocessing.cpu_count()
-    names = df[df.label1==insect_class].names.tolist()
-    names = random.sample(names, sample_size)
     pool = multiprocessing.Pool(processes=cpus)
     result_list = []
     if setting == 'psd':
@@ -203,9 +204,8 @@ def process_signal(data=None, fname=None, plot=False):
     if plot:
         import matplotlib.pyplot as plt
         plt.figure(figsize=(24,6))
-        plt.subplot(3,1,1); plt.plot(data); plt.title('raw')
-        plt.subplot(3,1,2); plt.plot(sig); plt.title('bandpassed')
-        plt.subplot(3,1,3); plt.plot(psd.frequency, psd.pow_amp); plt.title('psd')
+        plt.subplot(2,1,1); plt.plot(data); plt.title('raw')
+        plt.subplot(2,1,2); plt.plot(psd.frequency, psd.pow_amp); plt.title('psd')
 
     specs[fname] = results
     return specs
