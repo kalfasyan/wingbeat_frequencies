@@ -100,8 +100,8 @@ def transform_data(X):
     # transform the data
     XX = np.zeros((X.shape[0],129)).astype("float32")   # allocate space
     for i in tqdm(range(X.shape[0])):
-        # XX[i] = 10*np.log10(signal.welch(X[i], fs=F_S, window='hanning', nperseg=256, noverlap=128+64)[1])
-        XX[i] = power_spectral_density(X[i], only_powers=True)
+        XX[i] = 10*np.log10(signal.welch(X[i], fs=F_S, window='hanning', nperseg=256, noverlap=128+64)[1])
+        # XX[i] = power_spectral_density(X[i], only_powers=True)
     return XX
 
 def read_simple(paths, return_df=False):

@@ -1,11 +1,13 @@
 import pandas as pd
 import numpy as np
 import logging
+import os
 
 L_CUTOFF = 200.
 H_CUTOFF = 3600.
 F_S = 8000.
 B_ORDER = 4
+TEMP_DATADIR = os.path.join(os.getcwd(), 'temp_data/')
 
 def butter_bandpass_filter(data, lowcut, highcut, fs, order):
 	from scipy.signal import butter, lfilter
