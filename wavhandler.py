@@ -92,7 +92,7 @@ def get_data(target_names=all_6, nr_signals=20000, only_names=True, verbose=0):
             print ("n_samples: %d" % X.shape[1])
             print ("duration (sec): %f" % (X.shape[1]/fs))
 
-    return (X, y) if not only_names else (filenames, y)
+    return (X, y, filenames) if not only_names else (filenames, y)
 
 def transform_data(X):
     from scipy import signal
