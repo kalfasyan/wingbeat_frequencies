@@ -3,6 +3,8 @@ import numpy as np
 import logging
 import os
 
+N_FFT = 256
+HOP_LEN = int(N_FFT/6)
 L_CUTOFF = 200.
 H_CUTOFF = 3600.
 F_S = 8000.
@@ -33,7 +35,7 @@ def crop_signal(data, window=300, intens_threshold=0.0004, offset=250):
 	sigseries = pd.Series(sig.reshape(-1,)) # fixing peculiarities
 	rolling_avg = np.abs(sigseries).rolling(window).mean() # rolling average
 	rolling_avg_thd = rolling_avg[rolling_avg > intens_threshold] # values above threshold
-	if len(rolling_avg_thd) > 256:
+	if len(rolling_avg_thd) > N_FFT:
 		iterable = rolling_avg_thd.index.tolist()
 		groups = [list(group) for group in mit.consecutive_groups(iterable)]
 		# Sizes of the groups
@@ -50,22 +52,6 @@ def crop_signal(data, window=300, intens_threshold=0.0004, offset=250):
 	else:
 		logging.debug('No values above intensity threshold!')
 		return None
-
-def psd_process(data, fs=F_S, scaling='density', window='hamming', nfft=None, noverlap=None, nperseg=None):#, crop_hz=H_CUTOFF):
-	from scipy import signal as sg
-	from scipy.signal import find_peaks
-	from sklearn.preprocessing import normalize
-
-	# Calculating PSD
-	freqs, p_amps = sg.welch(data, fs=fs, scaling=scaling, window=window, nfft=nfft, nperseg=nperseg, noverlap=noverlap)
-	# Normalization of PSD amplitudes
-	p_amps = normalize(p_amps.reshape(-1,1), norm='l2', axis=0).reshape(-1,)
-	psd = pd.concat([pd.Series(freqs), pd.Series(p_amps)], axis=1)
-	# Cropping up to 2500 Hz (mosquitos don't have more)
-	# psd = psd.iloc[:crop_hz,:]
-	psd.columns = ['frequency','pow_amp']
-
-	return psd
 
 def peak_finder(psd, min_freq=300.):
 	from scipy.signal import find_peaks
