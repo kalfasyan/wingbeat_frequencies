@@ -6,9 +6,17 @@ import random
 from utils import *
 import logging
 
-
 logger = logging.getLogger()
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.WARN)
+
+mosquitos_6 = ['Ae. aegypti', 'Ae. albopictus', 
+				'An. gambiae', 'An. arabiensis', 
+				'C. pipiens', 'C. quinquefasciatus']
+increasing_dataset = ['aedes_male', 'fuit_flies', 'house_flies', 'new_aedes_female', 
+						'new_stigma_male','new_tarsalis_male', 'quinx_female', 'quinx_male', 
+						'stigma_female', 'tarsalis_female']
+dros_zapr = ['LG_drosophila_10_09', 'LG_zapr_26_09']
+dros_zapr_szki = ['LG_drosophila_10_09', 'LG_zapr_26_09', 'LG_suzukii_18_09_faulty']
 
 class WavHandler(object):
 	""" """
@@ -41,12 +49,8 @@ class WavHandler(object):
 		if len(self.wav_filenames) == 0: # raising error if nothing is returned.
 			raise ValueError('No filenames retrieved!')
 
-all_6 = ['Ae. aegypti', 'Ae. albopictus', 'An. gambiae', 'An. arabiensis', 'C. pipiens', 'C. quinquefasciatus']
-mosquitos_6 = ['Ae. aegypti', 'Ae. albopictus', 'An. gambiae', 'An. arabiensis', 'C. pipiens', 'C. quinquefasciatus']
-dros_zapr = ['LG_drosophila_10_09', 'LG_zapr_26_09']
-
 def get_data(filedir = '/home/kalfasyan/data/insects/Wingbeats/',
-			target_names=all_6,
+			target_names=mosquitos_6,
 			nr_signals=20000,
 			only_names=True,
 			verbose=0):
@@ -194,9 +198,9 @@ def transform_data_parallel_spectograms(path):
 	return pd.Series(x)
 
 def power_spectral_density_parallel(path):
-	data, _ = read_simple([path])
+	X, _ = read_simple([path])
 	fname = path.split('/')[-1][:-4]
-	psd_pow_amps = power_spectral_density(data=data.flatten(), fname=fname, only_powers=True, crop=False)
+	psd_pow_amps = power_spectral_density(data=X.flatten(), fname=fname, only_powers=True, crop=False)
 	psd_pow_amps.name = fname
 	return psd_pow_amps
 

@@ -8,6 +8,7 @@ HOP_LEN = int(N_FFT/6)
 L_CUTOFF = 200.
 H_CUTOFF = 3600.
 F_S = 8000.
+SR = 8000
 B_ORDER = 4
 TEMP_DATADIR = os.path.join(os.getcwd(), 'temp_data/')
 
