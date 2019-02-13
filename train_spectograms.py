@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[ ]:
+# In[1]:
 
 
 #get_ipython().run_line_magic('reset', '-f')
@@ -26,7 +26,7 @@ import seaborn as sns
 sns.set()
 
 
-# In[ ]:
+# In[2]:
 
 
 import librosa
@@ -62,13 +62,13 @@ from keras.applications.vgg19 import VGG19
 from keras.applications.xception import Xception
 
 
-# In[ ]:
+# In[3]:
 
 
-current_model = DenseNet121
+# current_model = DenseNet121
 # current_model = DenseNet169
 # current_model = DenseNet201
-# current_model = InceptionResNetV2
+current_model = InceptionResNetV2
 # current_model = InceptionV3
 # current_model = MobileNet
 # current_model = NASNetLarge
@@ -77,7 +77,7 @@ current_model = DenseNet121
 # current_model = VGG19
 # current_model = Xception
 
-model_name = TEMP_DATADIR + 'wingbeats_190123_' + current_model.__name__
+model_name = TEMP_DATADIR + 'wingbeats_' + current_model.__name__
 
 best_weights_path = model_name + '.h5'
 log_path = model_name + '.log'
@@ -93,7 +93,7 @@ HOP_LEN = int(N_FFT / 6)
 input_shape = (129, 120, 1)
 
 
-# In[ ]:
+# In[4]:
 
 
 def shift(x, wshift, hshift, row_axis = 0, col_axis = 1, channel_axis = 2, fill_mode = 'constant', cval = 0.):
@@ -115,16 +115,24 @@ def random_data_shift(data, w_limit = (-0.25, 0.25), h_limit = (-0.0, 0.0), cval
     return data
 
 
-# In[ ]:
+# In[5]:
 
 
-X_names,y = get_data(target_names=all_6, nr_signals=999999, only_names=True)
+# DATADIR = '/home/kalfasyan/data/insects/increasing dataset/'
+# DATADIR = '/home/kalfasyan/data/insects/LG2/'
+# 
 
-X_names, y = shuffle(X_names, y, random_state = seed)
+target_names = mosquitos_6#os.listdir(DATADIR)
+
+filenames, y = get_data(#filedir= DATADIR,
+                      target_names=target_names, nr_signals=np.inf, only_names=True)
+print(target_names)
+
+X_names, y = shuffle(filenames, y, random_state = seed)
 X_train, X_test, y_train, y_test = train_test_split(X_names, y, stratify = y, test_size = 0.20, random_state = seed)
 
 
-# In[ ]:
+# In[6]:
 
 
 def train_generator():
@@ -144,7 +152,6 @@ def train_generator():
 
                 data = librosa.stft(data, n_fft = N_FFT, hop_length = HOP_LEN)
                 data = librosa.amplitude_to_db(np.abs(data))
-#                 data = np.abs(data)
                 data = np.flipud(data)
 
                 data = np.expand_dims(data, axis = -1)
@@ -166,7 +173,7 @@ def train_generator():
             yield x_batch, y_batch
 
 
-# In[ ]:
+# In[7]:
 
 
 def valid_generator():
@@ -184,7 +191,6 @@ def valid_generator():
 
                 data = librosa.stft(data, n_fft = N_FFT, hop_length = HOP_LEN)
                 data = librosa.amplitude_to_db(np.abs(data))
-#                 data = np.abs(data)
                 data = np.flipud(data)
 
                 data = np.expand_dims(data, axis = -1)
@@ -200,10 +206,9 @@ def valid_generator():
             yield x_batch, y_batch
 
 
-# In[ ]:
+# In[8]:
 
 
-# target_names = all_6
 # for start in range(0, len(X_test), batch_size):
 #     x_batch = []
 #     y_batch = []
@@ -232,7 +237,7 @@ def valid_generator():
 #     break
 
 
-# In[ ]:
+# In[9]:
 
 
 # plt.figure(figsize=(14,14))
@@ -240,12 +245,11 @@ def valid_generator():
 # plt.colorbar()
 # plt.grid(False)
 # plt.title(str(x_batch[0].shape))
+# data.shape
 
 
-# In[ ]:
+# In[10]:
 
-
-target_names = all_6
 
 img_input = Input(shape = input_shape)
 
