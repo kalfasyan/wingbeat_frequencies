@@ -3,13 +3,13 @@ import numpy as np
 import logging
 import os
 
-N_FFT = 256
-HOP_LEN = int(N_FFT/6)
+B_ORDER = 4
 L_CUTOFF = 200.
 H_CUTOFF = 3600.
 F_S = 8000.
+N_FFT = 256
 SR = 8000
-B_ORDER = 4
+HOP_LEN = int(N_FFT/6)
 TEMP_DATADIR = os.path.join(os.getcwd(), 'temp_data/')
 
 def butter_bandpass_filter(data, lowcut, highcut, fs, order):

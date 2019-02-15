@@ -153,12 +153,11 @@ def power_spectral_density(data=None, fname=None, only_powers=False, crop=False,
 	from scipy.signal import find_peaks
 	from sklearn.preprocessing import normalize
 
-	sig = data
 	if bandpass: # Buttersworth bandpass filter
-		sig = butter_bandpass_filter(data=data.flatten(), lowcut=L_CUTOFF, highcut=H_CUTOFF, fs=F_S, order=B_ORDER)
+		data = butter_bandpass_filter(data=data.flatten(), lowcut=L_CUTOFF, highcut=H_CUTOFF, fs=F_S, order=B_ORDER)
 	if crop: # Perform cropping
-		sig = crop_signal(sig, window=300, intens_threshold=0.0004, offset=200)
-		if sig is None or sig.empty or sig.shape[0] < 256:
+		data = crop_signal(data, window=300, intens_threshold=0.0004, offset=200)
+		if data is None or data.empty or data.shape[0] < 256:
 			logging.warning('Signal is None, empty or too small after cropping!')
 			return None
 	# Calculating PSD

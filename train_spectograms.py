@@ -66,9 +66,9 @@ from keras.applications.xception import Xception
 
 
 # current_model = DenseNet121
-# current_model = DenseNet169
+current_model = DenseNet169
 # current_model = DenseNet201
-current_model = InceptionResNetV2
+# current_model = InceptionResNetV2
 # current_model = InceptionV3
 # current_model = MobileNet
 # current_model = NASNetLarge
