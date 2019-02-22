@@ -272,3 +272,9 @@ def process_signal(data=None, fname=None, plot=False):
 
     specs[fname] = results
     return specs
+
+def get_wingbeat_timestamp(path):
+    import pandas as pd
+    fname = path.split('/')[-1]
+    t = fname.split('_')[0] + fname.split('_')[1]
+    return pd.to_datetime(t, format='F%y%m%d%H%M%S').hour

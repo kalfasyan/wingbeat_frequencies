@@ -16,6 +16,7 @@ import keras
 
 from wavhandler import *
 from utils import *
+from utils_train import random_data_shift_simple
 
 import logging
 logger = logging.getLogger()
@@ -65,8 +66,8 @@ from keras.applications.xception import Xception
 # In[3]:
 
 
-# current_model = DenseNet121
-current_model = DenseNet169
+current_model = DenseNet121
+# current_model = DenseNet169
 # current_model = DenseNet201
 # current_model = InceptionResNetV2
 # current_model = InceptionV3
@@ -92,10 +93,6 @@ N_FFT = 256
 HOP_LEN = int(N_FFT / 6)
 input_shape = (129, 120, 1)
 
-
-# In[4]:
-
-
 def shift(x, wshift, hshift, row_axis = 0, col_axis = 1, channel_axis = 2, fill_mode = 'constant', cval = 0.):
     h, w = x.shape[row_axis], x.shape[col_axis]
     tx = hshift * h
@@ -114,25 +111,15 @@ def random_data_shift(data, w_limit = (-0.25, 0.25), h_limit = (-0.0, 0.0), cval
         data = shift(data, wshift, hshift, cval = cval)
     return data
 
+target_names = mosquitos_6
 
-# In[5]:
-
-
-# DATADIR = '/home/kalfasyan/data/insects/increasing dataset/'
-# DATADIR = '/home/kalfasyan/data/insects/LG2/'
-# 
-
-target_names = mosquitos_6#os.listdir(DATADIR)
-
+# DATADIR = '/data/leuven/314/vsc31431/insects/Wingbeats/'
 filenames, y = get_data(#filedir= DATADIR,
                       target_names=target_names, nr_signals=np.inf, only_names=True)
 print(target_names)
 
 X_names, y = shuffle(filenames, y, random_state = seed)
 X_train, X_test, y_train, y_test = train_test_split(X_names, y, stratify = y, test_size = 0.20, random_state = seed)
-
-
-# In[6]:
 
 
 def train_generator():
@@ -154,8 +141,10 @@ def train_generator():
                 data = librosa.amplitude_to_db(np.abs(data))
                 data = np.flipud(data)
 
+                data = random_data_shift_simple(data, u=0.5, shift_pct=0.006, axis=0)
+                data = random_data_shift_simple(data, u=0.5, shift_pct=0.25, axis=1)
+
                 data = np.expand_dims(data, axis = -1)
-                data = random_data_shift(data, w_limit = (-0.25, 0.25), h_limit = (-0.0, 0.0), cval = np.min(data), u = 1.0)
 
                 # data = np.squeeze(data, axis = -1)
                 # plt.imshow(data, cmap = 'gray')
@@ -206,51 +195,6 @@ def valid_generator():
             yield x_batch, y_batch
 
 
-# In[8]:
-
-
-# for start in range(0, len(X_test), batch_size):
-#     x_batch = []
-#     y_batch = []
-
-#     end = min(start + batch_size, len(X_test))
-#     test_batch = X_test[start:end]
-#     labels_batch = y_test[start:end]
-
-#     for i in range(len(test_batch)):
-#         data, rate = librosa.load(test_batch[i], sr = SR)
-
-#         data = librosa.stft(data, n_fft = N_FFT, hop_length = HOP_LEN)
-# #                 data = librosa.amplitude_to_db(data)
-#         data = np.abs(data)
-#         data = np.flipud(data)
-
-#         data = np.expand_dims(data, axis = -1)
-
-#         x_batch.append(data)
-#         y_batch.append(labels_batch[i])
-
-#     x_batch = np.array(x_batch, np.float32)
-#     y_batch = np.array(y_batch, np.float32)
-
-#     y_batch = np_utils.to_categorical(y_batch, len(target_names))
-#     break
-
-
-# In[9]:
-
-
-# plt.figure(figsize=(14,14))
-# plt.imshow(x_batch[0].squeeze())
-# plt.colorbar()
-# plt.grid(False)
-# plt.title(str(x_batch[0].shape))
-# data.shape
-
-
-# In[10]:
-
-
 img_input = Input(shape = input_shape)
 
 model = current_model(input_tensor = img_input, classes = len(target_names), weights = None)
@@ -271,10 +215,6 @@ callbacks_list = [ModelCheckpoint(monitor = monitor,
                                 verbose = 1),
                     CSVLogger(filename = log_path)]
 
-
-# In[ ]:
-
-
 model.fit_generator(train_generator(),
     steps_per_epoch = int(math.ceil(float(len(X_train)) / float(batch_size))),
     validation_data = valid_generator(),
@@ -283,10 +223,6 @@ model.fit_generator(train_generator(),
     callbacks = callbacks_list,
     shuffle = False)
 
-
-# In[ ]:
-
-
 model.load_weights(best_weights_path)
 
 loss, acc = model.evaluate_generator(valid_generator(),
@@ -294,16 +230,3 @@ loss, acc = model.evaluate_generator(valid_generator(),
 
 #print('loss:', loss)
 print('Test accuracy:', acc)
-
-
-# In[ ]:
-
-
-
-
-
-# In[ ]:
-
-
-
-

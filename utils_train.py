@@ -27,9 +27,9 @@ def random_data_shift(data, w_limit = (-0.25, 0.25), h_limit = (-0.0, 0.0), cval
         data = shift(data, wshift, hshift, cval = cval)
     return data
 
-def random_data_shift_simple(data, u):
+def random_data_shift_simple(data, u, shift_pct=0.006, axis=0):
     if np.random.random() < u:
-        data = np.roll(data, int(round(np.random.uniform(-(len(data)*0.15), (len(data)*0.15)))))
+        data = np.roll(data, int(round(np.random.uniform(-(len(data)*shift_pct), (len(data)*shift_pct)))), axis=axis)
     return data
 
 def train_generator(X_train, y_train, batch_size, target_names, crop=False):
