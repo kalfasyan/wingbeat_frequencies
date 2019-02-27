@@ -170,7 +170,7 @@ img_input = Input(shape = input_shape)
 
 model = current_model(include_top = True, weights = None, input_tensor = img_input)
 
-x = model.get_layer(model.layers[-2].name).output#model.output
+x = model.get_layer(model.layers[-2].name).output # getting avg pooling layer
 
 meta_input = Input(shape = [24])
 y = BatchNormalization() (meta_input)
