@@ -54,12 +54,12 @@ def crop_signal(data, window=300, intens_threshold=0.0004, offset=250):
 		logging.debug('No values above intensity threshold!')
 		return None
 
-def peak_finder(psd, min_freq=300.):
+def peak_finder(psd, min_freq=0., only_freqs=False, h_threshold=0.01, d_threshold=3):
 	from scipy.signal import find_peaks
 	# Finding peaks in the whole PSD
-	peaks, vals = find_peaks(psd.pow_amp, height=0.03, distance=10)
+	peaks, vals = find_peaks(psd.pow_amp, height=h_threshold, distance=d_threshold)
 	peaks = [v for i,v in enumerate(peaks) if psd.frequency.iloc[peaks].iloc[i] > min_freq]
-	return peaks
+	return peaks if not only_freqs else psd.frequency.iloc[peaks].tolist()
 
 def get_harmonic(psd, peaks, h=1):
 	if len(peaks):
@@ -178,3 +178,31 @@ def create_classifier(name):
 	else:
 		raise ValueError('Wrong Classifier name given!')
 	return classifier
+
+def crop_rec(data):
+
+    f, t, Zxx = signal.stft(data, SR, nperseg=256)
+    Z = np.sum(np.abs(Zxx), axis=0)
+    max_pos = np.argmax(Z)
+    mid_x = 1+128*max_pos
+    nsamples = 5000
+    mid_x = np.max([nsamples/2, mid_x])
+    mid_x = np.min([len(data)-nsamples/2, mid_x])
+    x = data[(-nsamples/2 + mid_x + range(nsamples)).astype(int)]
+
+    # data original signal, x: cropped signal
+    return x
+
+def print_confusion(y_test, y_pred, target_names):
+    cm = confusion_matrix(y_test, y_pred)
+    df_cm = pd.DataFrame(cm, columns=target_names, index=target_names)
+    plt.figure(figsize = (15,10))
+    sns.heatmap(df_cm, annot=True, fmt="d")
+
+    print("")
+
+    cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
+    df_cm = pd.DataFrame(cm, columns=target_names, index=target_names)
+    plt.figure(figsize = (15,10))
+    sns.heatmap(df_cm, annot=True)
+    plt.show()

@@ -7,6 +7,7 @@ from scipy import signal
 from sklearn.metrics import confusion_matrix
 import matplotlib.pyplot as plt
 import seaborn as sns
+from utils import crop_rec, print_confusion
 
 
 def shift(x, wshift, hshift, row_axis = 0, col_axis = 1, channel_axis = 2, fill_mode = 'constant', cval = 0.):
@@ -102,31 +103,3 @@ def valid_generator(X_test, y_test, batch_size, target_names, crop=False):
 
             yield x_batch, y_batch
 
-def print_confusion(y_test, y_pred, target_names):
-    cm = confusion_matrix(y_test, y_pred)
-    df_cm = pd.DataFrame(cm, columns=target_names, index=target_names)
-    plt.figure(figsize = (15,10))
-    sns.heatmap(df_cm, annot=True, fmt="d")
-
-    print("")
-
-    cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
-    df_cm = pd.DataFrame(cm, columns=target_names, index=target_names)
-    plt.figure(figsize = (15,10))
-    sns.heatmap(df_cm, annot=True)
-    plt.show()
-
-
-def crop_rec(data):
-
-    f, t, Zxx = signal.stft(data, SR, nperseg=256)
-    Z = np.sum(np.abs(Zxx), axis=0)
-    max_pos = np.argmax(Z)
-    mid_x = 1+128*max_pos
-    nsamples = 5000
-    mid_x = np.max([nsamples/2, mid_x])
-    mid_x = np.min([len(data)-nsamples/2, mid_x])
-    x = data[(-nsamples/2 + mid_x + range(nsamples)).astype(int)]
-
-    # data original signal, x: cropped signal
-    return x

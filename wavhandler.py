@@ -1,5 +1,5 @@
 import numpy as np
-import glob
+import glob, os
 from natsort import natsorted
 import pandas as pd
 import random
@@ -9,14 +9,103 @@ import logging
 logger = logging.getLogger()
 logger.setLevel(logging.WARN)
 
-mosquitos_6 = ['Ae. aegypti', 'Ae. albopictus', 
-                'An. gambiae', 'An. arabiensis', 
-                'C. pipiens', 'C. quinquefasciatus']
-increasing_dataset = ['aedes_male', 'fuit_flies', 'house_flies', 'new_aedes_female', 
-                        'new_stigma_male','new_tarsalis_male', 'quinx_female', 'quinx_male', 
-                        'stigma_female', 'tarsalis_female']
-dros_zapr = ['LG_drosophila_10_09', 'LG_zapr_26_09']
-dros_zapr_szki = ['LG_drosophila_10_09', 'LG_zapr_26_09', 'LG_suzukii_18_09_faulty']
+BASE_DIR = '/home/kalfasyan/data/insects/'
+
+class Dataset(object):
+    """ """
+    def __init__(self, name):
+        super(Dataset, self).__init__()
+        assert os.path.isdir(BASE_DIR)
+        self.base_dir = BASE_DIR
+        self.name = name
+        self.directory = os.path.join(self.base_dir, self.name) + '/'
+        assert os.path.isdir(self.directory), 'No such dataset found in {}. Check your folder structure.'.format(self.base_dir)
+        self.target_classes = natsorted(os.listdir(os.path.join(self.base_dir, self.name)))
+        self.nr_classes = len(self.target_classes)
+        self.X = pd.DataFrame()
+        self.y = []
+
+    def load(self, nr_signals=np.inf, only_names=False, text_labels=False, verbose=0):
+        import os
+        import soundfile as sf
+        from tqdm import tqdm
+        from PIL import Image
+
+        # dataset = self.name
+        filedir = self.directory
+        target_names= self.target_classes
+
+        X = []                    # holds all data
+        y = []                    # holds all class labels
+        t = []                    # holds all class labels (text)
+
+        filenames = []            # holds all the file names
+        target_count = []         # holds the counts in a class
+
+        if verbose:
+            print('Gathering approximately {} signals from each class'.format(nr_signals))
+
+        for i, target in enumerate(tqdm(target_names)):
+            target_count.append(0)  # initialize target count
+            path=filedir + target + '/'    # assemble path string
+
+            for [root, dirs, files] in os.walk(path, topdown=False):
+                for filename in files:
+                    name,ext = os.path.splitext(filename)
+                    if ext=='.wav' or ext=='.jpg':
+                        name=os.path.join(root, filename)
+                        if not only_names:
+                            if ext=='.wav':
+                                data, fs = sf.read(name)
+                            elif ext=='.jpg':
+                                temp = Image.open(name)
+                                data = np.array(temp.copy())
+                                temp.close()
+                            X.append(data)
+                        y.append(i)
+                        t.append(target)
+                        filenames.append(name)
+                        target_count[i]+=1
+                        if target_count[i]>nr_signals:
+                            break
+            if verbose:
+                print (target,'#recs = ', target_count[i])
+        if text_labels:
+            y = t
+        if not only_names:
+            if not self.name.startswith('MOSQUITOES_IMGS'):
+                X = np.vstack(X)
+                X = X.astype("float32")
+            y = np.hstack(y)
+
+            if verbose:
+                print ("")
+                print ("Total dataset size:")
+                print ('# of classes: %d' % len(np.unique(y)))
+                print ('total dataset size: %d' % X.shape[0])
+                print ('Sampling frequency = %d Hz' % fs)
+                print ("n_samples: %d" % X.shape[1])
+                print ("duration (sec): %f" % (X.shape[1]/fs))
+        self.X = X
+        self.y = y
+        self.filenames = filenames
+
+        return (X, filenames, y) if not only_names else (filenames, y)
+    
+    def get_sensor_features(self, temp_humd=True):
+        assert hasattr(self, 'filenames')
+        df = pd.DataFrame(self.filenames, columns=['filenames'])
+        df['wavnames'] = df['filenames'].apply(lambda x: x.split('/')[-1][:-4])
+        df['date'] = df['wavnames'].apply(lambda x: pd.to_datetime(''.join(x.split('_')[0:2]), 
+                                                                    format='F%y%m%d%H%M%S'))
+        df['date_day'] = df['date'].apply(lambda x: x.day)
+        df['date_hour'] = df['date'].apply(lambda x: x.hour)
+        df['gain'] = df['wavnames'].apply(lambda x: x.split('_')[3:][1])
+        if temp_humd:
+            df['temperature'] = df['wavnames'].apply(lambda x: x.split('_')[3:][3])
+            df['humidity'] = df['wavnames'].apply(lambda x: x.split('_')[3:][5])
+        self.df_features = df
+        return df
 
 class WavHandler(object):
     """ """
@@ -49,19 +138,22 @@ class WavHandler(object):
         if len(self.wav_filenames) == 0: # raising error if nothing is returned.
             raise ValueError('No filenames retrieved!')
 
-def get_data(filedir = '/home/kalfasyan/data/insects/Wingbeats/',
-            target_names=mosquitos_6,
+def get_data(dataset='MOSQUITOES',
             nr_signals=20000,
             only_names=True,
+            text_labels=False,
             verbose=0):
     import os
     import soundfile as sf
     from tqdm import tqdm
-    # Read about 'nr_signals' of recs from every species
-    # Note: All wav files must be the same sampling frequency and number of datapoints!
+    from PIL import Image
+
+    filedir = DataSet(dataset).directory
+    target_names=DataSet(dataset).names
 
     X = []                    # holds all data
     y = []                    # holds all class labels
+    t = []                    # holds all class labels (text)
 
     filenames = []            # holds all the file names
     target_count = []         # holds the counts in a class
@@ -73,24 +165,32 @@ def get_data(filedir = '/home/kalfasyan/data/insects/Wingbeats/',
         for [root, dirs, files] in os.walk(path, topdown=False):
             for filename in files:
                 name,ext = os.path.splitext(filename)
-                if ext=='.wav':
+                if ext=='.wav' or ext=='.jpg':
                     name=os.path.join(root, filename)
                     if not only_names:
-                        data, fs = sf.read(name)
+                        if ext=='.wav':
+                            data, fs = sf.read(name)
+                        elif ext=='.jpg':
+                            temp = Image.open(name)
+                            data = np.array(temp.copy())
+                            temp.close()
                         X.append(data)
                     y.append(i)
+                    t.append(target)
                     filenames.append(name)
                     target_count[i]+=1
                     if target_count[i]>nr_signals:
                         break
         if verbose:
             print (target,'#recs = ', target_count[i])
-
+    if text_labels:
+        y = t
     if not only_names:
-        X = np.vstack(X)
+        if not dataset.startswith('MOSQUITOES_IMGS'):
+            X = np.vstack(X)
+            X = X.astype("float32")
         y = np.hstack(y)
 
-        X = X.astype("float32")
         if verbose:
             print ("")
             print ("Total dataset size:")
@@ -100,7 +200,7 @@ def get_data(filedir = '/home/kalfasyan/data/insects/Wingbeats/',
             print ("n_samples: %d" % X.shape[1])
             print ("duration (sec): %f" % (X.shape[1]/fs))
 
-    return (X, y, filenames) if not only_names else (filenames, y)
+    return (X, filenames, y) if not only_names else (filenames, y)
 
 def read_simple(paths, return_df=False):
     """
