@@ -4,7 +4,7 @@ import logging
 import os
 
 B_ORDER = 4
-L_CUTOFF = 200.
+L_CUTOFF = 150.
 H_CUTOFF = 3600.
 F_S = 8000.
 N_FFT = 256
