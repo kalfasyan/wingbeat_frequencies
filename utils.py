@@ -141,7 +141,7 @@ def make_tsfresh_settings(samples=300, feature_importances='feature_importances_
 
 	return kind_to_fc_parameters
 
-def create_classifier(name):
+def get_classifier(name):
 	name = name.lower()
 	if name == 'logreg':
 		from sklearn.linear_model import LogisticRegression
@@ -207,3 +207,69 @@ def print_confusion(y_test, y_pred, target_names):
     plt.figure(figsize = (15,10))
     sns.heatmap(df_cm, annot=True)
     plt.show()
+
+def similarity_matrix(mat, fun, axis=0, plot=False, uptr=False):
+	assert hasattr(fun, '__call__'), "fun is not a function"
+	initial = np.zeros((mat.shape[axis], 
+						mat.shape[axis]))
+	for i, vec1 in enumerate(mat):
+		for j, vec2 in enumerate(mat):
+			if fun.__name__ == 'spearmanr':
+				initial[i,j] = fun(vec1, vec2).correlation
+			else:
+				initial[i,j] = fun(vec1, vec2)	
+
+	if uptr:
+		return up_triang(initial)
+	if plot:
+		import seaborn as sns
+		sns.heatmap(initial)
+	return initial
+
+def similarity_matrix_fast(mat, metric, uptr=False, axis=0):
+	if metric == 'spearmanr':
+		logging.info('Please wait..')
+		from scipy.stats import spearmanr
+		initial = np.zeros((mat.shape[axis], 
+							mat.shape[axis]))
+		for i, vec1 in enumerate(mat):
+			for j, vec2 in enumerate(mat):
+				initial[i,j] = spearmanr(vec1, vec2).correlation
+		mat = initial
+	else:
+		from scipy.spatial.distance import pdist, squareform
+		mat = squareform(pdist(mat, metric))
+	if uptr:
+		return up_triang(mat, k=1)
+	else:
+		return mat
+
+def up_triang(mat, k=1):
+    return mat[np.triu_indices(len(mat), k)]
+
+def perform_analysis(X, y, setting='pca'):
+	from sklearn.decomposition import PCA
+	from sklearn.preprocessing import StandardScaler
+	from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
+	from sklearn.preprocessing import StandardScaler
+	import matplotlib.pyplot as plt
+	import seaborn as sns
+	sns.set()
+
+	X_std = StandardScaler(with_std=False).fit_transform(X)  # standardization of data
+
+	ncomps=3
+	if setting == 'pca':
+		pca = PCA(n_components=ncomps) 
+		X_final = pca.fit_transform(X_std)
+		print("Explained Variance with {0:d} components: {1:.2f}".format(ncomps,pca.explained_variance_ratio_.sum()) )
+	elif setting == 'lda':
+		lda = LDA(n_components=ncomps) 
+		X_final = lda.fit_transform(X_std,y)
+		print(X_final.shape)
+
+	plt.figure(figsize=(10,8))
+	sns.scatterplot(X_final[:,0], X_final[:,1],alpha=0.5, legend='full', hue=y) 
+	plt.xlabel('component 1')
+	plt.ylabel('component 2')
+	plt.show()
