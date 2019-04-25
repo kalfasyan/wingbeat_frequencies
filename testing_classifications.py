@@ -22,6 +22,7 @@ ap.add_argument("-s", "--setting", required=False,
     help="rgb vals of second image")    
 args = vars(ap.parse_args())
 
+
 print("Using {} model.".format(args['model_name']))
 print("Using {} setting.".format(args['setting']))
 time.sleep(1.)
@@ -29,15 +30,15 @@ time.sleep(1.)
 dataset = Dataset('LG')
 dataset.load(only_names=False, text_labels=False, nr_signals=np.inf)
 
-XX = transform_data(dataset.X)#, setting='melbank')
-print(XX.shape)
-make_classification_ml(XX, dataset.y, clf_name=args["model_name"])
+#XX = transform_data(dataset.X)#, setting='melbank')
+#print(XX.shape)
+#make_classification_ml(XX, dataset.y, clf_name=args["model_name"])
 
 # make_classification_conv1d( dataset.X, 
 #                             dataset.y, 
 #                             model_name=args["model_name")
 
-# make_classification_conv2d(dataset.filenames, 
-#                             dataset.y, 
-#                             model_name=args["model_name"], 
-#                             setting=args["setting"])
+make_classification_conv2d(dataset.filenames, 
+                            dataset.y, 
+                            model_name=args["model_name"], 
+                            setting=args["setting"])

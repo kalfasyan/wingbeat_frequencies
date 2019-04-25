@@ -100,6 +100,61 @@ def valid_generator(X_val, y_val, batch_size, target_names, setting='stft'):
 
             yield x_batch, y_batch
 
+
+def train_generator2(X_train, batch_size, target_names, setting='stft'):
+    obj = create_settings_obj(setting)
+    while True:
+        for start in range(0, len(X_train), batch_size):
+            x_batch = []
+            
+            end = min(start + batch_size, len(X_train))
+            train_batch = X_train[start:end]
+            
+            for i in range(len(train_batch)):
+                data, _ = librosa.load(train_batch[i], sr = SR)
+                if 'increasing dataset' in train_batch[i].split('/'):
+                    data = crop_rec(data)
+
+#                 data = random_data_shift(data, u = .2)
+
+                data = metamorphose(data, setting=setting, stg_obj=obj)
+                data = data[2:,2:]
+
+                data = np.expand_dims(data, axis = -1)
+
+                x_batch.append(data)
+
+            x_batch = np.array(x_batch, np.float32)
+
+            yield x_batch, x_batch
+
+def valid_generator2(X_val, batch_size, target_names, setting='stft'):
+    obj = create_settings_obj(setting)
+    while True:
+        for start in range(0, len(X_val), batch_size):
+            x_batch = []
+
+            end = min(start + batch_size, len(X_val))
+            test_batch = X_val[start:end]
+
+            for i in range(len(test_batch)):
+                data, _ = librosa.load(test_batch[i], sr = SR)
+                if 'increasing dataset' in test_batch[i].split('/'):
+                    data = crop_rec(data)
+
+                data = metamorphose(data, setting=setting, stg_obj=obj)
+                
+                data = data[2:,2:]
+
+                data = np.expand_dims(data, axis = -1)
+
+                x_batch.append(data)
+
+            x_batch = np.array(x_batch, np.float32)
+
+            yield x_batch, x_batch
+
+
 def metamorphose(data, setting='stft', stg_obj=None, img_sz=150):
     if setting=='stft':
         data = librosa.stft(data, n_fft = N_FFT, hop_length = HOP_LEN)
@@ -179,16 +234,7 @@ def make_classification_conv1d(X,y, model_name='test_', setting='raw'):
     if setting == 'psd_dB':
         X = transform_data(X, setting=setting)
 
-    X, y = shuffle(X, y, random_state=0)
-    X_train, X_test, y_train, y_test = train_test_split(X, y, 
-                                                    test_size=0.10,
-                                                    stratify=y, 
-                                                    random_state=0)
-    X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, 
-                                                    test_size=0.2, 
-                                                    stratify=y_train,
-                                                    random_state=0)
-    print("X_train shape: \t{}\nX_test shape:\t{}\nX_val shape:\t{}\n".format(X_train.shape, X_test.shape, X_val.shape))
+    X_train, X_test, X_val, y_train, y_test, y_val = train_test_val_split(X,y, random_state=0)
 
     # Convert label to onehot
     y_train = to_categorical(y_train, num_classes=targets)
@@ -271,6 +317,8 @@ def make_classification_conv2d(X_names, y, model_name='test_', setting='stft', u
         input_shape = (150,150,1)
     elif setting=='stft':
         input_shape = (129, 120, 1)
+    else:
+        raise ValueError('No valid data setting provided')
 
     # More settings
     model_name = model_name + '_' + setting + '_' + current_model.__name__
@@ -297,15 +345,8 @@ def make_classification_conv2d(X_names, y, model_name='test_', setting='stft', u
     else:
         print('Class balance: \n{}\n'.format(pd.DataFrame(y).iloc[:,0].value_counts()))
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, 
-                                                        test_size=0.10, 
-                                                        stratify=y, 
-                                                        random_state=0)
-    X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, 
-                                                    test_size=0.2, 
-                                                    stratify=y_train,  
-                                                    random_state=0)
-    print("Train shape: \t{}, \nTest shape: \t{}, \nValid shape: \t{}".format(len(X_train), len(X_test), len(X_val)))
+    X_train, X_test, X_val, y_train, y_test, y_val = train_test_val_split(X,y, random_state=0)
+
     # Model parameters
     img_input = Input(shape = input_shape)
     model = current_model(input_tensor = img_input, classes = len(target_names), weights = None)
@@ -408,3 +449,18 @@ def make_autoencoder_2d():####UNDER CONSTRUCTION####
 
     # take a look at the reconstructed digits
     decoded_imgs = autoencoder.predict(x_test)
+
+def train_test_val_split(X,y, random_state=0, verbose=1):
+    from sklearn.model_selection import train_test_split
+    X, y = shuffle(X, y, random_state=random_state)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, 
+                                                    test_size=0.10,
+                                                    stratify=y, 
+                                                    random_state=0)
+    X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, 
+                                                    test_size=0.2, 
+                                                    stratify=y_train,
+                                                    random_state=0)
+    if isinstance(X_train, np.ndarray):
+        print("X_train shape: \t{}\nX_test shape:\t{}\nX_val shape:\t{}\n".format(X_train.shape, X_test.shape, X_val.shape))
+    return X_train, X_test, X_val, y_train, y_test, y_val
