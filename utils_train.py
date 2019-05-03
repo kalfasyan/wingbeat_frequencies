@@ -192,7 +192,7 @@ def create_settings_obj(setting='gasf', img_sz=150):
         raise ValueError("Wrong setting given.")
     return obj
 
-def make_classification_ml(X,y, clf_name='xgboost', undersampling=True):
+def make_classification_ml(X,y, clf_name='xgboost', undersampling=True, confmat=True, featimpt=True):
     from sklearn.metrics import accuracy_score
     from sklearn.model_selection import train_test_split
     import xgboost
@@ -215,6 +215,18 @@ def make_classification_ml(X,y, clf_name='xgboost', undersampling=True):
     y_pred = classifier.predict(X_test)
     ac = accuracy_score(y_test, y_pred)
     print("Name: %s, ac: %f" % ('model', ac))
+    if confmat:
+        import matplotlib.pyplot as plt
+        from sklearn.metrics import confusion_matrix
+        import seaborn as sns
+        cm = confusion_matrix(y_test, y_pred)
+        sns.heatmap(cm, annot=True, fmt='g')
+        plt.show()
+    if featimpt:
+        feature_importances = pd.DataFrame(classifier.feature_importances_,
+                                    columns=['importance']).sort_values('importance', ascending=False)
+        print(feature_importances.head())
+    return classifier
 
 def make_classification_conv1d(X,y, model_name='test_', setting='raw'):
     from sklearn.model_selection import train_test_split
