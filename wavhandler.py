@@ -104,8 +104,8 @@ class Dataset(object):
         df['date_hour'] = df['date'].apply(lambda x: x.hour)
         df['gain'] = df['wavnames'].apply(lambda x: x.split('_')[3:][1])
         if temp_humd:
-            df['temperature'] = df['wavnames'].apply(lambda x: x.split('_')[3:][3])
-            df['humidity'] = df['wavnames'].apply(lambda x: x.split('_')[3:][5])
+            df['temperature'] = pd.to_numeric(df['wavnames'].apply(lambda x: x.split('_')[3:][3]))
+            df['humidity'] = pd.to_numeric(df['wavnames'].apply(lambda x: x.split('_')[3:][5]))
         self.df_features = df
         return df
 
