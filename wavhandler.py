@@ -45,7 +45,7 @@ class Dataset(object):
         if verbose:
             print('Gathering approximately {} signals from each class'.format(nr_signals))
 
-        for i, target in enumerate(tqdm(target_names)):
+        for i, target in enumerate(tqdm(target_names, disable=DISABLE_TQDM)):
             target_count.append(0)  # initialize target count
             path=filedir + target + '/'    # assemble path string
 
@@ -109,6 +109,23 @@ class Dataset(object):
         self.df_features = df
         return df
 
+    def get_frequency_peaks(self, filter_signal=False):
+        from scipy.signal import find_peaks
+        assert hasattr(self, 'X'), 'Load the data first.'
+        assert isinstance(self.X, np.ndarray)
+        freq_range = np.linspace(0, F_S/2, 129)
+        freqs = []
+        for i in range(self.X.shape[0]):
+            sig = self.X[i,:]
+            if filter_signal:
+                sig = butter_bandpass_filter(sig, L_CUTOFF, H_CUTOFF, F_S, B_ORDER)
+            sig_tr = transform_data(sig)
+            peaks, _ = find_peaks(sig_tr)
+            freqs = freqs + freq_range[peaks].tolist()
+        df = pd.DataFrame(pd.to_numeric(pd.Series(freqs)), columns=['freqs'])
+        df = df[df['freqs'] < 500]
+        np_hist(df,'freqs')
+
 class WavHandler(object):
     """ """
     def __init__(self, directory, sample_size=-1, recursive=False, nat_sort=True):
@@ -140,70 +157,6 @@ class WavHandler(object):
         if len(self.wav_filenames) == 0: # raising error if nothing is returned.
             raise ValueError('No filenames retrieved!')
 
-def get_data(dataset='MOSQUITOES',
-            nr_signals=20000,
-            only_names=True,
-            text_labels=False,
-            verbose=0):
-    import os
-    import soundfile as sf
-    from tqdm import tqdm
-    from PIL import Image
-
-    filedir = DataSet(dataset).directory
-    target_names=DataSet(dataset).names
-
-    X = []                    # holds all data
-    y = []                    # holds all class labels
-    t = []                    # holds all class labels (text)
-
-    filenames = []            # holds all the file names
-    target_count = []         # holds the counts in a class
-
-    for i, target in enumerate(tqdm(target_names)):
-        target_count.append(0)  # initialize target count
-        path=filedir + target + '/'    # assemble path string
-
-        for [root, dirs, files] in os.walk(path, topdown=False):
-            for filename in files:
-                name,ext = os.path.splitext(filename)
-                if ext=='.wav' or ext=='.jpg':
-                    name=os.path.join(root, filename)
-                    if not only_names:
-                        if ext=='.wav':
-                            data, fs = sf.read(name)
-                        elif ext=='.jpg':
-                            temp = Image.open(name)
-                            data = np.array(temp.copy())
-                            temp.close()
-                        X.append(data)
-                    y.append(i)
-                    t.append(target)
-                    filenames.append(name)
-                    target_count[i]+=1
-                    if target_count[i]>nr_signals:
-                        break
-        if verbose:
-            print (target,'#recs = ', target_count[i])
-    if text_labels:
-        y = t
-    if not only_names:
-        if not dataset.startswith('MOSQUITOES_IMGS'):
-            X = np.vstack(X)
-            X = X.astype("float32")
-        y = np.hstack(y)
-
-        if verbose:
-            print ("")
-            print ("Total dataset size:")
-            print ('# of classes: %d' % len(np.unique(y)))
-            print ('total dataset size: %d' % X.shape[0])
-            print ('Sampling frequency = %d Hz' % fs)
-            print ("n_samples: %d" % X.shape[1])
-            print ("duration (sec): %f" % (X.shape[1]/fs))
-
-    return (X, filenames, y) if not only_names else (filenames, y)
-
 def read_simple(paths, return_df=False):
     """
     Function to read wav files into a numpy array given their paths.
@@ -213,8 +166,8 @@ def read_simple(paths, return_df=False):
     import soundfile as sf
     data = []
     names = []
-    for wav_ind, wavname in enumerate(paths):
-        wavdata, fs = sf.read(wavname)
+    for _, wavname in enumerate(paths):
+        wavdata, _ = sf.read(wavname)
         #assert fs == 8000 and wavdata.shape[0] == 5000
         data.append(wavdata)
         names.append(wavname)
@@ -229,7 +182,6 @@ def read_simple(paths, return_df=False):
         return datamatrix, names
     else:
         return datamatrix, names
-# Mel-scale filterbank features
 
 def transform_data(X, setting = None):
     from scipy import signal
@@ -238,7 +190,7 @@ def transform_data(X, setting = None):
     # transform the data
     if setting=='spectrograms':
         XX = []#np.zeros((X.shape[0],129*120))
-        for i in tqdm(range(X.shape[0])):
+        for i in tqdm(range(X.shape[0]), disable=DISABLE_TQDM):
             data = librosa.stft(X[i], n_fft = N_FFT, hop_length = HOP_LEN)
             data = librosa.amplitude_to_db(np.abs(data))
             XX.append(np.flipud(data).flatten())
@@ -248,11 +200,13 @@ def transform_data(X, setting = None):
         for i in range(X.shape[0]):
            XX[i] = np.log10(np.mean(librosa.feature.melspectrogram(X[i], sr=F_S, n_mels=80), axis=1))
     else: # default transformation is welch PSD 
+        if len(X.shape) == 1:
+            X = X.reshape(1,-1)
         XX = np.zeros((X.shape[0],129)).astype("float32")   # allocate space
-        for i in tqdm(range(X.shape[0])):
+        for i in tqdm(range(X.shape[0]), disable=DISABLE_TQDM):
             XX[i] = 10*np.log10(signal.welch(X[i], fs=F_S, window='hanning', nperseg=256, noverlap=128+64)[1])
             # XX[i] = power_spectral_density(X[i], only_powers=True)
-    return XX
+    return XX.squeeze()
 
 def power_spectral_density(data=None, fname=None, only_powers=False, crop=False, bandpass=False,
                             fs=F_S, scaling='density', window='hanning', nperseg=256, noverlap=128+64, nfft=None):
@@ -281,9 +235,8 @@ def power_spectral_density(data=None, fname=None, only_powers=False, crop=False,
 
 def read_simple_parallel(path):
     import soundfile as sf
-    wavname = path
     fname = path.split('/')[-1][:-4]
-    wavdata, fs = sf.read(path)
+    wavdata, _ = sf.read(path)
     wavseries = pd.Series(wavdata)
     wavseries.name = fname
     return wavseries
@@ -374,6 +327,20 @@ def process_signal(data=None, fname=None, plot=False):
 
     specs[fname] = results
     return specs
+
+def plot_wingbeat(data=None, plot=False):
+    import matplotlib.pyplot as plt
+    plt.figure(figsize=(20,10))
+    plt.subplot(2,2,1)
+    plt.title('raw')
+    plt.plot(data)
+    plt.subplot(2,2,2)
+    plt.title('filtered')
+    plt.plot(butter_bandpass_filter(data, lowcut=L_CUTOFF, highcut=H_CUTOFF, fs=F_S, order=B_ORDER))
+    plt.subplot(2,2,3)
+    plt.title('transformed psd')
+    plt.plot(transform_data(data))
+    plt.show()
 
 def get_wingbeat_timestamp(path):
     import pandas as pd

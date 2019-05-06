@@ -5,12 +5,13 @@ import logging
 import os
 
 B_ORDER = 4
-L_CUTOFF = 150.
+L_CUTOFF = 120.
 H_CUTOFF = 3600.
 F_S = 8000.
 N_FFT = 256
 SR = 8000
 HOP_LEN = int(N_FFT/6)
+DISABLE_TQDM = True
 TEMP_DATADIR = os.path.join(os.getcwd(), 'temp_data/')
 
 def butter_bandpass_filter(data, lowcut, highcut, fs, order):
