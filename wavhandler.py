@@ -112,11 +112,13 @@ class Dataset(object):
     def get_frequency_peaks(self, filter_signal=False):
         from scipy.signal import find_peaks
         assert hasattr(self, 'X'), 'Load the data first.'
-        assert isinstance(self.X, np.ndarray)
+        assert isinstance(self.X, np.ndarray) or isinstance(self.X, pd.DataFrame) 
+        if isinstance(self.X, pd.DataFrame):
+            X = self.X.values
         freq_range = np.linspace(0, F_S/2, 129)
         freqs = []
-        for i in range(self.X.shape[0]):
-            sig = self.X[i,:]
+        for i in range(X.shape[0]):
+            sig = X[i,:]
             if filter_signal:
                 sig = butter_bandpass_filter(sig, L_CUTOFF, H_CUTOFF, F_S, B_ORDER)
             sig_tr = transform_data(sig)
@@ -125,37 +127,35 @@ class Dataset(object):
         df = pd.DataFrame(pd.to_numeric(pd.Series(freqs)), columns=['freqs'])
         df = df[df['freqs'] < 500]
         np_hist(df,'freqs')
+    
+    def read(self, nr_data='all',fext='wav', labels='text', loadmat=True, setting='read'):
+        import glob
 
-class WavHandler(object):
-    """ """
-    def __init__(self, directory, sample_size=-1, recursive=False, nat_sort=True):
-        """
-        :param directory: the directory where the wav files are.
-        :param sample_size: this refers to how many wav file to keep (randomly samples)
-        """
-        super(WavHandler, self).__init__()
-        self.directory = directory
-        self.sample_size = sample_size
-
-        if recursive: # recursively selecting all files from directory and subdirectories within it.
-            self.wav_filenames = list(glob.iglob(directory+'/**/*.wav', recursive=True))
+        if isinstance(nr_data, str) and nr_data=='all':
+            self.filenames = list(glob.iglob(self.directory + '/**/*.{}'.format(fext), recursive=True))
         else:
-            self.wav_filenames = glob.glob(directory+'*.wav')
+            assert isinstance(nr_data, int) and nr_data > 0, "Provide a positive integer for number of data"
+            self.filenames = list(glob.iglob(self.directory + '/**/*.{}'.format(fext), recursive=True))
+            if nr_data < len(self.filenames):
+                self.filenames = random.sample(self.filenames, nr_data)
+            else:
+                print("Provided larger number than total nr of signals. Reading all data available")
+                self.filenames = list(glob.iglob(self.directory + '/**/*.{}'.format(fext), recursive=True))
+        assert len(self.filenames), "No data found."
 
-        if nat_sort: # sorting file names naturally (natural sorting)
-            self.wav_filenames = natsorted(self.wav_filenames)
+        if loadmat:
+            # self.X = read_simple(self.filenames)[0]
+            self.X = make_df_parallel(names=self.filenames, setting=setting)
 
-        if isinstance(sample_size, int): # checking sample size and sampling
-            if sample_size > -1:
-                self.wav_filenames = random.sample(self.wav_filenames, sample_size)
-        elif isinstance(sample_size, str):
-            if sample_size == 'all':
-                pass
+        if labels=='text':
+            self.y = pd.Series(self.filenames).apply(lambda x: x.split('/')[x.split('/').index(self.name)+1])
+        elif labels=='nr':
+            from sklearn.preprocessing import LabelEncoder
+            self.y = pd.Series(self.filenames).apply(lambda x: x.split('/')[x.split('/').index(self.name)+1])                
+            le = LabelEncoder()
+            self.y = pd.Series(le.fit_transform(self.y))
         else:
-            raise ValueError('Wrong sample_size given!')
-
-        if len(self.wav_filenames) == 0: # raising error if nothing is returned.
-            raise ValueError('No filenames retrieved!')
+            raise ValueError('Wrong value given for labels argument.')
 
 def read_simple(paths, return_df=False):
     """
@@ -168,11 +168,9 @@ def read_simple(paths, return_df=False):
     names = []
     for _, wavname in enumerate(paths):
         wavdata, _ = sf.read(wavname)
-        #assert fs == 8000 and wavdata.shape[0] == 5000
         data.append(wavdata)
         names.append(wavname)
-    datamatrix = np.asarray(data).T
-    #assert datamatrix.shape == (5000, len(paths))
+    datamatrix = np.asarray(data)
     logging.debug('datamatrix array created')
     logging.debug('names list created')
 
@@ -288,7 +286,7 @@ def make_df_parallel(setting=None, names=None):
         logging.error('Wrong setting!')
     pool.close()
     df = pd.concat(result_list[0], axis=1, sort=False)
-    return df
+    return df.T
 
 def process_signal(data=None, fname=None, plot=False):
     specs = {}

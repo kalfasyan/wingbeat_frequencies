@@ -103,6 +103,9 @@ venv.bak/
 # mypy
 .mypy_cache/
 
+# vscode
+.vscode/
+
 # my ignores
 /temp_data
 /supervised/deprecated
