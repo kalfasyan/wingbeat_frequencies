@@ -111,10 +111,11 @@ class Dataset(object):
 
     def get_frequency_peaks(self, filter_signal=False):
         from scipy.signal import find_peaks
+
         assert hasattr(self, 'X'), 'Load the data first.'
         assert isinstance(self.X, np.ndarray) or isinstance(self.X, pd.DataFrame) 
-        if isinstance(self.X, pd.DataFrame):
-            X = self.X.values
+
+        X = self.X.values if isinstance(self.X, pd.DataFrame) else self.X
         freq_range = np.linspace(0, F_S/2, 129)
         freqs = []
         for i in range(X.shape[0]):
@@ -130,6 +131,8 @@ class Dataset(object):
     
     def read(self, nr_data='all',fext='wav', labels='text', loadmat=True, setting='read'):
         import glob
+        import time
+        tic = time.time()
 
         if isinstance(nr_data, str) and nr_data=='all':
             self.filenames = list(glob.iglob(self.directory + '/**/*.{}'.format(fext), recursive=True))
@@ -142,10 +145,15 @@ class Dataset(object):
                 print("Provided larger number than total nr of signals. Reading all data available")
                 self.filenames = list(glob.iglob(self.directory + '/**/*.{}'.format(fext), recursive=True))
         assert len(self.filenames), "No data found."
+        self.filenames = pd.Series(self.filenames)
+        print("Read filenames in {:.2f} seconds.".format(time.time() - tic))
 
         if loadmat:
-            # self.X = read_simple(self.filenames)[0]
-            self.X = make_df_parallel(names=self.filenames, setting=setting)
+            if setting == 'read':
+                self.X = read_simple(self.filenames, return_df=True)[0]
+            else:
+                self.X = make_df_parallel(names=self.filenames, setting=setting)
+            print("Loaded data into matrix in {:.2f} seconds.".format(time.time()-tic))
 
         if labels=='text':
             self.y = pd.Series(self.filenames).apply(lambda x: x.split('/')[x.split('/').index(self.name)+1])
@@ -157,6 +165,20 @@ class Dataset(object):
         else:
             raise ValueError('Wrong value given for labels argument.')
 
+    def select_class(self, selection=None, fext='wav'):
+        if not selection is None:
+            assert isinstance(selection, str), "Provide a string of the class you want to select."
+            assert selection in self.target_classes, "Selection given not found in dataset classes."
+            self.target_classes = selection
+            self.name = "{}/{}".format(self.name, selection)
+            self.nr_classes = 1
+            inds = self.y[self.y == selection].index
+            self.filenames = self.filenames[inds]
+            self.X = self.X.iloc[inds,:]
+            self.y = self.y[inds]
+        else:
+            raise ValueError("Wrong selection given.")
+
 def read_simple(paths, return_df=False):
     """
     Function to read wav files into a numpy array given their paths.
@@ -164,6 +186,7 @@ def read_simple(paths, return_df=False):
     Return a dataframe if return_df is True.
     """
     import soundfile as sf
+    from tqdm import tqdm
     data = []
     names = []
     for _, wavname in enumerate(paths):
