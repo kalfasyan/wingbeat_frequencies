@@ -24,6 +24,7 @@ class Dataset(object):
         self.nr_classes = len(self.target_classes)
         self.X = pd.DataFrame()
         self.y = []
+        self.setting = 'read'
 
     def load(self, nr_signals=np.inf, only_names=False, text_labels=False, verbose=0):
         import os
@@ -94,7 +95,7 @@ class Dataset(object):
 
         return (X, filenames, y) if not only_names else (filenames, y)
     
-    def get_sensor_features(self, temp_humd=True):
+    def get_sensor_features(self, temp_humd=True, hist_temp=False, hist_humd=False, hist_date=False):
         assert hasattr(self, 'filenames')
         df = pd.DataFrame(self.filenames, columns=['filenames'])
         df['wavnames'] = df['filenames'].apply(lambda x: x.split('/')[-1][:-4])
@@ -106,14 +107,24 @@ class Dataset(object):
         if temp_humd:
             df['temperature'] = pd.to_numeric(df['wavnames'].apply(lambda x: x.split('_')[3:][3]))
             df['humidity'] = pd.to_numeric(df['wavnames'].apply(lambda x: x.split('_')[3:][5]))
+        if hist_temp:
+            np_hist(df, 'temperature')
+        if hist_humd:
+            np_hist(df, 'humidity')
+        if hist_date:
+            import matplotlib.pyplot as plt
+            plt.figure(figsize=(10,6))
+            df.date.hist(xrot=45)
+            plt.ylabel('Counts of signals')
         self.df_features = df
-        return df
+        # return df
 
     def get_frequency_peaks(self, filter_signal=False):
         from scipy.signal import find_peaks
 
         assert hasattr(self, 'X'), 'Load the data first.'
         assert isinstance(self.X, np.ndarray) or isinstance(self.X, pd.DataFrame) 
+        assert self.setting == 'read', "You need to read the raw data to get frequency peaks."
 
         X = self.X.values if isinstance(self.X, pd.DataFrame) else self.X
         freq_range = np.linspace(0, F_S/2, 129)
@@ -132,6 +143,7 @@ class Dataset(object):
     def read(self, nr_data='all',fext='wav', labels='text', loadmat=True, setting='read'):
         import glob
         import time
+        self.setting = setting
         tic = time.time()
 
         if isinstance(nr_data, str) and nr_data=='all':
@@ -150,7 +162,7 @@ class Dataset(object):
 
         if loadmat:
             if setting == 'read':
-                self.X = read_simple(self.filenames, return_df=True)[0]
+                self.X = pd.DataFrame(read_simple(self.filenames)[0])
             else:
                 self.X = make_df_parallel(names=self.filenames, setting=setting)
             print("Loaded data into matrix in {:.2f} seconds.".format(time.time()-tic))
@@ -178,6 +190,31 @@ class Dataset(object):
             self.y = self.y[inds]
         else:
             raise ValueError("Wrong selection given.")
+    
+    def plot_activity_times(self):
+        import matplotlib.pyplot as plt
+        df = pd.DataFrame(self.filenames.apply(lambda x: get_wingbeat_timestamp(x)).value_counts())
+        df['counts'] = df[0]
+        df['ind'] = df.index
+        df.counts.sort_index().plot(kind='bar', figsize=(14,10))
+        plt.ylabel('Counts of signals')
+        plt.xlabel('Hour of the day (24H)')
+        plt.title('Activity times of {}'.format(self.name))
+        plt.show()
+    
+    def overview(self):
+        import matplotlib.pyplot as plt
+        print("The dataset has {} target classes:\n{}\n".format(self.nr_classes, self.target_classes))
+        print("-----------------------------\n")
+        print("Class balance:\n{}\n".format(self.y.value_counts()))
+        print("-----------------------------\n")
+        print("Overview of the data:\n{}".format(self.X.head()))
+        print("-----------------------------\n")
+        self.get_frequency_peaks()
+        plt.figure()
+        self.get_sensor_features(hist_date=True, hist_humd=True, hist_temp=True)
+        plt.show()
+
 
 def read_simple(paths, return_df=False):
     """
@@ -197,12 +234,7 @@ def read_simple(paths, return_df=False):
     logging.debug('datamatrix array created')
     logging.debug('names list created')
 
-    if return_df:
-        datamatrix = pd.DataFrame(datamatrix,
-                      columns=[names[i].split('/')[-1][:-4] for i in range(datamatrix.shape[1])])
-        return datamatrix, names
-    else:
-        return datamatrix, names
+    return datamatrix, names
 
 def transform_data(X, setting = None):
     from scipy import signal
