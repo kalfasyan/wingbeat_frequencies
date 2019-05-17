@@ -140,19 +140,23 @@ class Dataset(object):
         df = df[df['freqs'] < 500]
         np_hist(df,'freqs')
     
-    def read(self, nr_data='all',fext='wav', labels='text', loadmat=True, setting='read'):
+    def read(self, data='all',fext='wav', labels='text', loadmat=True, setting='read'):
         import glob
         import time
         self.setting = setting
         tic = time.time()
 
-        if isinstance(nr_data, str) and nr_data=='all':
+        if isinstance(data, str) and data=='all':
             self.filenames = list(glob.iglob(self.directory + '/**/*.{}'.format(fext), recursive=True))
+        elif isinstance(data, str) and data in self.target_classes:
+            tmpfnames = pd.Series(glob.iglob(self.directory + '/**/*.{}'.format(fext), recursive=True))
+            basedirlen = len(self.base_dir.split('/'))
+            self.filenames = tmpfnames[tmpfnames.apply(lambda x: x.split('/')[basedirlen]) == data]
         else:
-            assert isinstance(nr_data, int) and nr_data > 0, "Provide a positive integer for number of data"
+            assert isinstance(data, int) and data > 0, "Provide a positive integer for number of data"
             self.filenames = list(glob.iglob(self.directory + '/**/*.{}'.format(fext), recursive=True))
-            if nr_data < len(self.filenames):
-                self.filenames = random.sample(self.filenames, nr_data)
+            if data < len(self.filenames):
+                self.filenames = random.sample(self.filenames, data)
             else:
                 print("Provided larger number than total nr of signals. Reading all data available")
                 self.filenames = list(glob.iglob(self.directory + '/**/*.{}'.format(fext), recursive=True))
