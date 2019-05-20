@@ -14,6 +14,7 @@ from sklearn.utils import shuffle
 import warnings
 import logging
 import math
+from utils import crop_rec
 
 def shift(x, wshift, hshift, row_axis = 0, col_axis = 1, channel_axis = 2, fill_mode = 'constant', cval = 0.):
     h, w = x.shape[row_axis], x.shape[col_axis]
