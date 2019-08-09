@@ -26,98 +26,125 @@ class Dataset(object):
         self.y = []
         self.setting = 'read'
 
-    def load(self, nr_signals=np.inf, only_names=False, text_labels=False, verbose=0):
-        import os
-        import soundfile as sf
-        from tqdm import tqdm
-        from PIL import Image
+    def read(self, data='all',fext='wav', labels='text', loadmat=True, setting='read'):
+        """
+        Function to read wingbeat data with possibility to expand for image data as well.
+        """
+        import time
+        self.setting = setting
+        tic = time.time()
+        assert isinstance(data, str) or isinstance(data, int), "Unsupported format for data. Give str or int."
+        all_data = list(glob.iglob(self.directory + '/**/*.{}'.format(fext), recursive=True))
 
-        # dataset = self.name
-        filedir = self.directory
-        target_names= self.target_classes
+        # Reading Filenames of data
+        # Load ALL data of dataset
+        if data=='all': 
+            self.filenames = all_data
+        # Load only specified class
+        elif data in self.target_classes: 
+            tmpfnames = pd.Series(glob.iglob(self.directory + '/**/*.{}'.format(fext), recursive=True))
+            basedirlen = len(self.base_dir.split('/'))
+            self.filenames = tmpfnames[tmpfnames.apply(lambda x: x.split('/')[basedirlen]) == data]
+        # In case an integer is provided
+        elif data < 0:
+            raise ValueError("Provide a positive integer for number of data")
+        # Load part of data 
+        else:
+            self.filenames = all_data
+            # If given number is smaller than total
+            if data < len(self.filenames):
+                self.filenames = random.sample(self.filenames, data)
+            # If given number is larger than total
+            else:
+                print("Provided larger number than total nr of signals. Reading all data available")
+                self.filenames = all_data
+        assert len(self.filenames), "No data found."
+        self.filenames = pd.Series(self.filenames)
+        print("Read {} filenames in {:.2f} seconds.".format(len(self.filenames) ,time.time() - tic))
 
-        X = []                    # holds all data
-        y = []                    # holds all class labels
-        t = []                    # holds all class labels (text)
+        # Reading values of data
+        if loadmat:
+            # If raw data is needed
+            if setting == 'read':
+                self.X = pd.DataFrame(read_simple(self.filenames)[0])
+            # Load data according to setting provided
+            else:
+                self.X = make_df_parallel(names=self.filenames, setting=setting)
+            print("Loaded data into matrix in {:.2f} seconds.".format(time.time()-tic))
 
-        filenames = []            # holds all the file names
-        target_count = []         # holds the counts in a class
+        # Reading labels
+        if labels=='text':
+            self.y = pd.Series(self.filenames).apply(lambda x: x.split('/')[x.split('/').index(self.name)+1])
+        elif labels=='nr':
+            from sklearn.preprocessing import LabelEncoder
+            self.y = pd.Series(self.filenames).apply(lambda x: x.split('/')[x.split('/').index(self.name)+1])                
+            le = LabelEncoder()
+            self.y = pd.Series(le.fit_transform(self.y))
+        else:
+            raise ValueError('Wrong value given for labels argument.')
 
-        if verbose:
-            print('Gathering approximately {} signals from each class'.format(nr_signals))
+    def select_class(self, selection=None, fext='wav'):
+        if not selection is None:
+            assert isinstance(selection, str), "Provide a string of the class you want to select."
+            assert selection in self.target_classes, "Selection given not found in dataset classes: {}".format(self.target_classes)
+            self.target_classes = selection
+            self.name = "{}/{}".format(self.name, selection)
+            self.nr_classes = 1
+            inds = self.y[self.y == selection].index
+            self.filenames = self.filenames[inds]
+            self.X = self.X.iloc[inds,:]
+            self.y = self.y[inds]
+        else:
+            raise ValueError("Wrong selection given.")        
 
-        for i, target in enumerate(tqdm(target_names, disable=DISABLE_TQDM)):
-            target_count.append(0)  # initialize target count
-            path=filedir + target + '/'    # assemble path string
-
-            for [root, dirs, files] in os.walk(path, topdown=False):
-                for filename in files:
-                    name,ext = os.path.splitext(filename)
-                    if ext=='.wav' or ext=='.jpg':
-                        name=os.path.join(root, filename)
-                        if not only_names:
-                            if ext=='.wav':
-                                data, fs = sf.read(name)
-                                if self.name == 'increasing dataset':
-                                    data = crop_rec(data)
-                            elif ext=='.jpg':
-                                temp = Image.open(name)
-                                data = np.array(temp.copy())
-                                temp.close()
-                            X.append(data)
-                        y.append(i)
-                        t.append(target)
-                        filenames.append(name)
-                        target_count[i]+=1
-                        if target_count[i]>nr_signals:
-                            break
-            if verbose:
-                print (target,'#recs = ', target_count[i])
-        if text_labels:
-            y = t
-        if not only_names:
-            if not self.name.startswith('MOSQUITOES_IMGS'):
-                X = np.vstack(X)
-                X = X.astype("float32")
-            y = np.hstack(y)
-
-            if verbose:
-                print ("")
-                print ("Total dataset size:")
-                print ('# of classes: %d' % len(np.unique(y)))
-                print ('total dataset size: %d' % X.shape[0])
-                print ('Sampling frequency = %d Hz' % fs)
-                print ("n_samples: %d" % X.shape[1])
-                print ("duration (sec): %f" % (X.shape[1]/fs))
-        self.X = X
-        self.y = y
-        self.filenames = filenames
-
-        return (X, filenames, y) if not only_names else (filenames, y)
-    
-    def get_sensor_features(self, temp_humd=True, hist_temp=False, hist_humd=False, hist_date=False):
+    def get_sensor_features(self, version='1',temp_humd=True, hist_temp=False, hist_humd=False, hist_date=False):
         assert hasattr(self, 'filenames')
         df = pd.DataFrame(self.filenames, columns=['filenames'])
         df['wavnames'] = df['filenames'].apply(lambda x: x.split('/')[-1][:-4])
-        df['date'] = df['wavnames'].apply(lambda x: pd.to_datetime(''.join(x.split('_')[0:2]), 
-                                                                    format='F%y%m%d%H%M%S'))
-        df['date_day'] = df['date'].apply(lambda x: x.day)
-        df['date_hour'] = df['date'].apply(lambda x: x.hour)
-        df['gain'] = df['wavnames'].apply(lambda x: x.split('_')[3:][1])
-        if temp_humd:
-            df['temperature'] = pd.to_numeric(df['wavnames'].apply(lambda x: x.split('_')[3:][3]))
-            df['humidity'] = pd.to_numeric(df['wavnames'].apply(lambda x: x.split('_')[3:][5]))
-        if hist_temp:
-            np_hist(df, 'temperature')
-        if hist_humd:
-            np_hist(df, 'humidity')
-        if hist_date:
-            import matplotlib.pyplot as plt
-            plt.figure(figsize=(10,6))
-            df.date.hist(xrot=45)
-            plt.ylabel('Counts of signals')
-        self.df_features = df
-        # return df
+
+        if version=='1':                        
+            df['date'] = df['wavnames'].apply(lambda x: pd.to_datetime(''.join(x.split('_')[0:2]), 
+                                                                        format='F%y%m%d%H%M%S'))
+            df['date_day'] = df['date'].apply(lambda x: x.day)
+            df['date_hour'] = df['date'].apply(lambda x: x.hour)
+            df['gain'] = df['wavnames'].apply(lambda x: x.split('_')[3:][1])
+            if temp_humd:
+                df['temperature'] = pd.to_numeric(df['wavnames'].apply(lambda x: x.split('_')[3:][3]))
+                df['humidity'] = pd.to_numeric(df['wavnames'].apply(lambda x: x.split('_')[3:][5]))
+            if hist_temp:
+                np_hist(df, 'temperature')
+            if hist_humd:
+                np_hist(df, 'humidity')
+            if hist_date:
+                import matplotlib.pyplot as plt
+                plt.figure(figsize=(10,6))
+                df.date.hist(xrot=45)
+                plt.ylabel('Counts of signals')
+            self.df_features = df
+        # Fresnel sensor version
+        elif version=='2':
+            print('VERSION 2')
+            df['date'] = df['wavnames'].apply(lambda x: pd.to_datetime(''.join(x.split('_')[1]), 
+                                                                        format='%Y%m%d%H%M%S'))
+            df['date_day'] = df['date'].apply(lambda x: x.day)
+            df['date_hour'] = df['date'].apply(lambda x: x.hour)
+            df['index'] = df['wavnames'].apply(lambda x: x.split('_')[2])
+            if temp_humd:
+                df['temperature'] = pd.to_numeric(df['wavnames'].apply(lambda x: x.split('_')[3][4:]))
+                df['humidity'] = pd.to_numeric(df['wavnames'].apply(lambda x: x.split('_')[4][3:]))
+            if hist_temp:
+                np_hist(df, 'temperature')
+            if hist_humd:
+                np_hist(df, 'humidity')
+            if hist_date:
+                import matplotlib.pyplot as plt
+                plt.figure(figsize=(10,6))
+                df.date.hist(xrot=45)
+                plt.ylabel('Counts of signals')
+            self.df_features = df
+
+
+
 
     def get_frequency_peaks(self, filter_signal=False):
         from scipy.signal import find_peaks
@@ -139,62 +166,7 @@ class Dataset(object):
         df = pd.DataFrame(pd.to_numeric(pd.Series(freqs)), columns=['freqs'])
         df = df[df['freqs'] < 500]
         np_hist(df,'freqs')
-    
-    def read(self, data='all',fext='wav', labels='text', loadmat=True, setting='read'):
-        import glob
-        import time
-        self.setting = setting
-        tic = time.time()
-
-        if isinstance(data, str) and data=='all':
-            self.filenames = list(glob.iglob(self.directory + '/**/*.{}'.format(fext), recursive=True))
-        elif isinstance(data, str) and data in self.target_classes:
-            tmpfnames = pd.Series(glob.iglob(self.directory + '/**/*.{}'.format(fext), recursive=True))
-            basedirlen = len(self.base_dir.split('/'))
-            self.filenames = tmpfnames[tmpfnames.apply(lambda x: x.split('/')[basedirlen]) == data]
-        else:
-            assert isinstance(data, int) and data > 0, "Provide a positive integer for number of data"
-            self.filenames = list(glob.iglob(self.directory + '/**/*.{}'.format(fext), recursive=True))
-            if data < len(self.filenames):
-                self.filenames = random.sample(self.filenames, data)
-            else:
-                print("Provided larger number than total nr of signals. Reading all data available")
-                self.filenames = list(glob.iglob(self.directory + '/**/*.{}'.format(fext), recursive=True))
-        assert len(self.filenames), "No data found."
-        self.filenames = pd.Series(self.filenames)
-        print("Read filenames in {:.2f} seconds.".format(time.time() - tic))
-
-        if loadmat:
-            if setting == 'read':
-                self.X = pd.DataFrame(read_simple(self.filenames)[0])
-            else:
-                self.X = make_df_parallel(names=self.filenames, setting=setting)
-            print("Loaded data into matrix in {:.2f} seconds.".format(time.time()-tic))
-
-        if labels=='text':
-            self.y = pd.Series(self.filenames).apply(lambda x: x.split('/')[x.split('/').index(self.name)+1])
-        elif labels=='nr':
-            from sklearn.preprocessing import LabelEncoder
-            self.y = pd.Series(self.filenames).apply(lambda x: x.split('/')[x.split('/').index(self.name)+1])                
-            le = LabelEncoder()
-            self.y = pd.Series(le.fit_transform(self.y))
-        else:
-            raise ValueError('Wrong value given for labels argument.')
-
-    def select_class(self, selection=None, fext='wav'):
-        if not selection is None:
-            assert isinstance(selection, str), "Provide a string of the class you want to select."
-            assert selection in self.target_classes, "Selection given not found in dataset classes."
-            self.target_classes = selection
-            self.name = "{}/{}".format(self.name, selection)
-            self.nr_classes = 1
-            inds = self.y[self.y == selection].index
-            self.filenames = self.filenames[inds]
-            self.X = self.X.iloc[inds,:]
-            self.y = self.y[inds]
-        else:
-            raise ValueError("Wrong selection given.")
-    
+        
     def plot_activity_times(self):
         import matplotlib.pyplot as plt
         df = pd.DataFrame(self.filenames.apply(lambda x: get_wingbeat_timestamp(x)).value_counts())
