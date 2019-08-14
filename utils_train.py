@@ -8,8 +8,8 @@ from pyts.image import GramianAngularField, RecurrencePlot, MarkovTransitionFiel
 import cv2
 from scipy import signal
 from sklearn.metrics import confusion_matrix
-from keras.utils import np_utils
-from keras.preprocessing import image
+# from keras.utils import np_utils
+# from keras.preprocessing import image
 from sklearn.utils import shuffle
 import warnings
 import logging

@@ -60,7 +60,7 @@ class Dataset(object):
                 self.filenames = all_data
         assert len(self.filenames), "No data found."
         self.filenames = pd.Series(self.filenames)
-        print("Read {} filenames in {:.2f} seconds.".format(len(self.filenames) ,time.time() - tic))
+        print("Data: {}.\nRead {} filenames in {:.2f} seconds.".format(data, len(self.filenames) ,time.time() - tic))
 
         # Reading values of data
         if loadmat:
@@ -82,6 +82,18 @@ class Dataset(object):
             self.y = pd.Series(le.fit_transform(self.y))
         else:
             raise ValueError('Wrong value given for labels argument.')
+
+    def clean(self, threshold=10, plot=True):
+        assert self.setting == 'psd_dB', "Cleaning works with psd_dB setting"
+
+        self.y.index = list(self.y.reset_index(drop=True).index)
+        self.X['var'] = self.X.apply(lambda x: x.iloc[10:50].var(), axis=1)
+        inds = self.X[(self.X['var'] > threshold)].index
+
+        if plot:
+            np_hist(self.X, 'var')
+
+        self.X, self.y = self.X.loc[inds].drop('var',axis=1).dropna(), self.y.loc[inds].dropna()
 
     def select_class(self, selection=None, fext='wav'):
         if not selection is None:

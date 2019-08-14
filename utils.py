@@ -275,11 +275,13 @@ def perform_analysis(X, y, setting='pca'):
     plt.ylabel('component 2')
     plt.show()
 
-def np_hist(df, col, res=0.1):
+def np_hist(df, col, res=0.1, rot=45, fs=12):
     import matplotlib.pyplot as plt
     import numpy as np
     values = df[col]
     _bins, _edges = np.histogram(values, np.arange(df[col].min(), df[col].max(), res))
     plt.plot(_edges[:len(_edges)-1], _bins)
     plt.ylabel('counts'); plt.xlabel(col)
+    plt.xticks(rotation=rot, fontsize=fs);
+    plt.yticks(fontsize=fs);
     plt.show()
