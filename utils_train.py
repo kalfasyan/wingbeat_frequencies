@@ -4,7 +4,7 @@ import numpy as np
 import librosa
 import matplotlib.pyplot as plt
 import seaborn as sns
-from pyts.image import GramianAngularField, RecurrencePlot, MarkovTransitionField
+# from pyts.image import GramianAngularField, RecurrencePlot, MarkovTransitionField
 import cv2
 from scipy import signal
 from sklearn.metrics import confusion_matrix
@@ -15,6 +15,7 @@ import warnings
 import logging
 import math
 from utils import crop_rec
+from keras.utils import np_utils
 
 def shift(x, wshift, hshift, row_axis = 0, col_axis = 1, channel_axis = 2, fill_mode = 'constant', cval = 0.):
     h, w = x.shape[row_axis], x.shape[col_axis]
@@ -321,7 +322,6 @@ def make_classification_conv2d(X_names, y, model_name='test_', setting='stft', u
     from sklearn.preprocessing import LabelEncoder
     from keras.layers import Input
     from keras.callbacks import ModelCheckpoint, EarlyStopping, ReduceLROnPlateau, CSVLogger
-    from keras.utils import np_utils
 
     current_model = DenseNet121
 
@@ -344,7 +344,7 @@ def make_classification_conv2d(X_names, y, model_name='test_', setting='stft', u
     target_names = np.unique(y)
 
     y = LabelEncoder().fit_transform(y)
-    X = np.array(X_names).reshape(-1,1)
+    X = X_names#np.array(X_names).reshape(-1,1)
 
     X, y = shuffle(X, y, random_state=0) 
 
