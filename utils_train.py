@@ -103,60 +103,6 @@ def valid_generator(X_val, y_val, batch_size, target_names, setting='stft'):
             yield x_batch, y_batch
 
 
-def train_generator2(X_train, batch_size, target_names, setting='stft'):
-    obj = create_settings_obj(setting)
-    while True:
-        for start in range(0, len(X_train), batch_size):
-            x_batch = []
-            
-            end = min(start + batch_size, len(X_train))
-            train_batch = X_train[start:end]
-            
-            for i in range(len(train_batch)):
-                data, _ = librosa.load(train_batch[i], sr = SR)
-                if 'increasing dataset' in train_batch[i].split('/'):
-                    data = crop_rec(data)
-
-#                 data = random_data_shift(data, u = .2)
-
-                data = metamorphose(data, setting=setting, stg_obj=obj)
-                data = data[2:,2:]
-
-                data = np.expand_dims(data, axis = -1)
-
-                x_batch.append(data)
-
-            x_batch = np.array(x_batch, np.float32)
-
-            yield x_batch, x_batch
-
-def valid_generator2(X_val, batch_size, target_names, setting='stft'):
-    obj = create_settings_obj(setting)
-    while True:
-        for start in range(0, len(X_val), batch_size):
-            x_batch = []
-
-            end = min(start + batch_size, len(X_val))
-            test_batch = X_val[start:end]
-
-            for i in range(len(test_batch)):
-                data, _ = librosa.load(test_batch[i], sr = SR)
-                if 'increasing dataset' in test_batch[i].split('/'):
-                    data = crop_rec(data)
-
-                data = metamorphose(data, setting=setting, stg_obj=obj)
-                
-                data = data[2:,2:]
-
-                data = np.expand_dims(data, axis = -1)
-
-                x_batch.append(data)
-
-            x_batch = np.array(x_batch, np.float32)
-
-            yield x_batch, x_batch
-
-
 def metamorphose(data, setting='stft', stg_obj=None, img_sz=150):
     if setting=='stft':
         data = librosa.stft(data, n_fft = N_FFT, hop_length = HOP_LEN)
