@@ -116,6 +116,8 @@ def metamorphose(data, setting='stft', stg_obj=None, img_sz=150):
             warnings.simplefilter("ignore")
             data = librosa.amplitude_to_db(data)
         data = np.flipud(data)
+    elif setting == 'raw':
+        return data
     elif setting=='gasf':
         data = stg_obj.fit_transform(data.reshape(1,-1)).squeeze()
     elif setting=='gadf':
@@ -133,6 +135,8 @@ def create_settings_obj(setting='gasf', img_sz=150):
     if setting == 'stft':
         obj = None
     elif setting == 'melspec':
+        obj = None
+    elif setting == 'raw':
         obj = None
     elif setting == 'gasf':
         obj = GramianAngularField(image_size=img_sz, method='summation')
