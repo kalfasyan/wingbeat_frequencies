@@ -164,6 +164,12 @@ def metamorphose(data, setting='stft', stg_obj=None, img_sz=150):
             warnings.simplefilter("ignore")
             data = librosa.amplitude_to_db(data)
         data = np.flipud(data)
+    elif setting == 'melspec':
+        data = np.log10(librosa.feature.melspectrogram(data, sr=SR, hop_length=HOP_LEN))
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            data = librosa.amplitude_to_db(data)
+        data = np.flipud(data)
     elif setting=='gasf':
         data = stg_obj.fit_transform(data.reshape(1,-1)).squeeze()
     elif setting=='gadf':
@@ -179,6 +185,8 @@ def metamorphose(data, setting='stft', stg_obj=None, img_sz=150):
 
 def create_settings_obj(setting='gasf', img_sz=150):
     if setting == 'stft':
+        obj = None
+    elif setting == 'melspec':
         obj = None
     elif setting == 'gasf':
         obj = GramianAngularField(image_size=img_sz, method='summation')
@@ -328,8 +336,10 @@ def make_classification_conv2d(X_names, y, model_name='test_', setting='stft', u
     # Training setting - What kind of data to use
     if setting in ['gasf','gadf', 'mtf', 'rp']:
         input_shape = (150,150,1)
-    elif setting=='stft':
+    elif setting == 'stft':
         input_shape = (129, 120, 1)
+    elif setting == 'melspec':
+        input_shape = (128, 120, 1)
     else:
         raise ValueError('No valid data setting provided')
 

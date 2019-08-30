@@ -6,5 +6,6 @@ from utils_train import *
 data1 = Dataset('Wingbeats')
 data1.read(data='all', setting='read', labels='text', loadmat=False)
 
-make_classification_conv2d(data1.filenames.tolist(), data1.y.tolist(), model_name='mosquitos', setting='stft',
+make_classification_conv2d(data1.filenames.tolist(), data1.y.tolist(), model_name='mosquitoes', setting='stft',
                           undersampling=False)
+# make_classification_conv2d(data1.filenames.tolist(), data1.y.tolist(), setting='melspec', undersampling=False)
