@@ -12,14 +12,56 @@ from utils_train import train_test_val_split
 import math
 from utils_train import train_generator, valid_generator
 
-data = Dataset('Wingbeats')
-data.read(data='all', setting='read', loadmat=False, labels='nr')
+# data = Dataset('Wingbeats')
+# data.read(data="all", setting='read', loadmat=False, labels='nr')
 
+
+data1 = Dataset('Leafminers')
+data1.read(data=data1.target_classes[0], setting='read', loadmat=False, labels='nr')
+
+data2 = Dataset('LG')
+data2.read(data=data2.target_classes[0], setting='read', loadmat=False, labels='nr')
+
+data3 = Dataset('LG')
+data3.read(data=data3.target_classes[1], setting='read', loadmat=False, labels='nr')
+
+data4 = Dataset('Pcfruit')
+data4.read(data=data4.target_classes[1], setting='read', loadmat=False, labels='nr')
+
+# data1.clean(plot=False)
+# data2.clean(plot=False)
+# data3.clean(plot=False)
+# data4.clean(plot=False)
+
+data = pd.DataFrame()
+data['filenames'] = pd.concat([data1.filenames, data2.filenames, data3.filenames, data4.filenames], axis=0).reset_index(drop=True)
+data['y'] = data.filenames.apply(lambda x: x.split('/')[6])
+
+from sklearn.preprocessing import LabelEncoder
+le = LabelEncoder()
+data['y'] = le.fit_transform(data['y'])
+
+####
 X,y = data.filenames.tolist(), data.y.tolist()
-model_name='first_' 
+#values.reshape(-1,1)
+
+model_name='raw_noundersampling_' 
 setting='raw'
-batch_size = 32
 top_weights_path = TEMP_DATADIR + str(model_name) + '.h5'
+targets = len(np.unique(y))
+batch_size = 32
+
+if False:#undersampling:
+    from imblearn.under_sampling import RandomUnderSampler
+    ros = RandomUnderSampler(random_state=0)
+    ros.fit(X,y)
+    X, y = ros.fit_resample(X,y)
+    X = pd.Series(X.ravel()).tolist()
+    y = pd.Series(y.ravel()).tolist()
+    print('After undersampling: \n{}\n'.format(pd.DataFrame(y).iloc[:,0].value_counts()))
+else:
+    print('Class balance: \n{}\n'.format(pd.DataFrame(y).iloc[:,0].value_counts()))
+
 
 X_train, X_test, X_val, y_train, y_test, y_val = train_test_val_split(X,y, random_state=0)
 
@@ -80,7 +122,12 @@ model.fit_generator(train_generator(X_train, y_train, batch_size=batch_size,
                     callbacks = callbacks_list)
 
 model.load_weights(top_weights_path)
-loss, acc = model.evaluate(X_test, y_test, batch_size=16)
+loss, acc = model.evaluate_generator(valid_generator(X_test, 
+                                                    y_test, 
+                                                    batch_size=batch_size, 
+                                                    setting=setting, 
+                                                    target_names=target_names),
+        steps = int(math.ceil(float(len(X_test)) / float(batch_size))))
 
 print('loss', loss)
 print('Test accuracy:', acc)

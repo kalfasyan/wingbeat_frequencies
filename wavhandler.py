@@ -113,7 +113,7 @@ class Dataset(object):
         assert hasattr(self, 'filenames')
         df = pd.DataFrame(self.filenames, columns=['filenames'])
         df['wavnames'] = df['filenames'].apply(lambda x: x.split('/')[-1][:-4])
-
+        # LightGuide sensor version
         if version=='1':                        
             df['date'] = df['wavnames'].apply(lambda x: pd.to_datetime(''.join(x.split('_')[0:2]), 
                                                                         format='F%y%m%d%H%M%S'))

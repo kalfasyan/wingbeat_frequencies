@@ -17,6 +17,34 @@ import math
 from utils import crop_rec
 from keras.utils import np_utils
 
+class TrainConfiguration(object):
+    """ Configuration for training procedures. Contains all settings """
+    def __init__(self, model_name='test', batch_size=32, monitor='val_acc', es_patience=7, rlr_patience=3):
+        super(TrainConfiguration, self).__init__()
+
+        self.model_name = model_name
+        self.top_weights_path = TEMP_DATA_DIR + str(self.model_name) + '.h5'
+        self.logfile = TEMP_DATA_DIR + str(self.model_name) + '.log'
+        self.batch_size = batch_size
+        self.monitor = monitor
+        self.es_patience = es_patience
+        self.rlr_patience = rlr_patience
+        self.target_names = np.unique(y)
+        self.callbacks_list = [ModelCheckpoint(monitor = self.monitor,
+                                    filepath = self.top_weights_path,
+                                    save_best_only = True,
+                                    save_weights_only = True,
+                                    verbose = 1),
+                                EarlyStopping(monitor = self.monitor,
+                                            patience = self.es_patience,
+                                            verbose = 1),
+                                ReduceLROnPlateau(monitor = self.monitor,
+                                            factor = 0.1,
+                                            patience = self.rlr_patience,
+                                            verbose = 1),
+                                CSVLogger(filename = self.logfile)]
+
+
 def shift(x, wshift, hshift, row_axis = 0, col_axis = 1, channel_axis = 2, fill_mode = 'constant', cval = 0.):
     h, w = x.shape[row_axis], x.shape[col_axis]
     tx = hshift * h
@@ -202,20 +230,21 @@ def make_classification_conv1d(X,y, model_name='test_', setting='raw'):
 
     top_weights_path = TEMP_DATADIR + str(model_name) + '.h5'
     targets = len(np.unique(y))
+    batch_size = 32
 
-    if setting == 'psd_dB':
-        X = transform_data(X, setting=setting)
+    if True:#undersampling:
+        from imblearn.under_sampling import RandomUnderSampler
+        ros = RandomUnderSampler(random_state=0)
+        ros.fit(X,y)
+        X, y = ros.fit_resample(X,y)
+        X = pd.Series(X.ravel()).tolist()
+        y = pd.Series(y.ravel()).tolist()
+        print('After undersampling: \n{}\n'.format(pd.DataFrame(y).iloc[:,0].value_counts()))
+    else:
+        print('Class balance: \n{}\n'.format(pd.DataFrame(y).iloc[:,0].value_counts()))
+
 
     X_train, X_test, X_val, y_train, y_test, y_val = train_test_val_split(X,y, random_state=0)
-
-    # Convert label to onehot
-    y_train = to_categorical(y_train, num_classes=targets)
-    y_val = to_categorical(y_val, num_classes=targets)
-    y_test = to_categorical(y_test, num_classes=targets)
-
-    X_train = np.expand_dims(X_train, axis=-1)
-    X_val = np.expand_dims(X_val, axis=-1)
-    X_test = np.expand_dims(X_test, axis=-1)
 
     # Build the Neural Network
     model = Sequential()
@@ -256,10 +285,25 @@ def make_classification_conv1d(X,y, model_name='test_', setting='raw'):
         ReduceLROnPlateau(monitor = 'val_acc', factor = 0.1, patience = 3, verbose = 1),
         CSVLogger('model_' + str(model_name) + '.log')]
 
-    model.fit(X_train, y_train, batch_size=32, epochs=100, validation_data = [X_val, y_val], callbacks = callbacks_list)
+    model.fit_generator(train_generator(X_train, y_train, batch_size=batch_size,
+                                    target_names=target_names,
+                                    setting=setting),
+                    steps_per_epoch = int(math.ceil(float(len(X_train)) / float(batch_size))),
+                    epochs=100,
+                    validation_data = valid_generator(X_val, y_val,
+                                                        batch_size=batch_size,
+                                                        target_names=target_names,
+                                                        setting=setting),
+                        validation_steps=int(math.ceil(float(len(X_test))/float(batch_size))),
+                        callbacks = callbacks_list)
 
     model.load_weights(top_weights_path)
-    loss, acc = model.evaluate(X_test, y_test, batch_size=16)
+    loss, acc = model.evaluate_generator(valid_generator(X_test, 
+                                                        y_test, 
+                                                        batch_size=batch_size, 
+                                                        setting=setting, 
+                                                        target_names=target_names),
+            steps = int(math.ceil(float(len(X_test)) / float(batch_size))))
 
     print('loss', loss)
     print('Test accuracy:', acc)
@@ -269,7 +313,6 @@ def make_classification_conv1d(X,y, model_name='test_', setting='raw'):
     model_yaml = model.to_yaml()
     with open(TEMP_DATADIR + model_name + "_raw_final.yaml", "w") as yaml_file:
         yaml_file.write(model_yaml)
-    model.save_weights(TEMP_DATADIR + model_name + "_raw_weights_final.h5")
 
 def make_classification_conv2d(X_names, y, model_name='test_', setting='stft', undersampling=True):
     seed = 2018
@@ -370,7 +413,6 @@ def make_classification_conv2d(X_names, y, model_name='test_', setting='stft', u
     model_yaml = model.to_yaml()
     with open(TEMP_DATADIR + model_name + ".yaml", "w") as yaml_file:
         yaml_file.write(model_yaml)
-    model.save_weights(TEMP_DATADIR + model_name + "_weights.h5")
 
 def make_autoencoder_2d():####UNDER CONSTRUCTION####
     from keras.layers import Input, Conv2D, MaxPooling2D, UpSampling2D
