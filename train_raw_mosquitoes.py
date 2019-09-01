@@ -45,7 +45,7 @@ data.read(data="all", setting='read', loadmat=False, labels='nr')
 X,y = data.filenames.tolist(), data.y.tolist()
 #values.reshape(-1,1)
 
-model_name='mosquitoes_final' 
+model_name='mosquitoes_final_raw' 
 setting='raw'
 top_weights_path = TEMP_DATADIR + str(model_name) + '.h5'
 targets = len(np.unique(y))
