@@ -28,5 +28,4 @@ data.read(data='all', setting='read', labels='text', loadmat=False)
 # data['y'] = data.filenames.apply(lambda x: x.split('/')[6])
 
 make_classification_conv2d(data.filenames.tolist(), data.y.tolist(), model_name='mosquitoes_buda', setting='stft',
-                          undersampling=False)
 # make_classification_conv2d(data1.filenames.tolist(), data1.y.tolist(), setting='melspec', undersampling=False)
