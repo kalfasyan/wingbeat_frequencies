@@ -117,6 +117,7 @@ class Dataset(object):
         if version=='1':                        
             df['date'] = df['wavnames'].apply(lambda x: pd.to_datetime(''.join(x.split('_')[0:2]), 
                                                                         format='F%y%m%d%H%M%S'))
+            df['datestr'] = df['date'].apply(lambda x: x.strftime("%Y%m%d"))
             df['date_day'] = df['date'].apply(lambda x: x.day)
             df['date_hour'] = df['date'].apply(lambda x: x.hour)
             df['gain'] = df['wavnames'].apply(lambda x: x.split('_')[3:][1])
@@ -138,6 +139,7 @@ class Dataset(object):
             print('VERSION 2')
             df['date'] = df['wavnames'].apply(lambda x: pd.to_datetime(''.join(x.split('_')[1]), 
                                                                         format='%Y%m%d%H%M%S'))
+            df['datestr'] = df['date'].apply(lambda x: x.strftime("%Y%m%d"))
             df['date_day'] = df['date'].apply(lambda x: x.day)
             df['date_hour'] = df['date'].apply(lambda x: x.hour)
             df['index'] = df['wavnames'].apply(lambda x: x.split('_')[2])
