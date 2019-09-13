@@ -1,3 +1,8 @@
+%reset -f
+from wavhandler import *
+import pandas as pd
+import numpy as np
+from utils_train import *
 from sklearn.model_selection import train_test_split
 from keras.models import Sequential
 from keras.layers import Dense, Dropout, Activation
@@ -8,13 +13,11 @@ from sklearn.model_selection import train_test_split
 from keras.callbacks import ModelCheckpoint, EarlyStopping, ReduceLROnPlateau, CSVLogger
 from keras.utils import to_categorical
 from wavhandler import *
-from utils_train import train_test_val_split
 import math
-from utils_train import train_generator, valid_generator
 
 data = Dataset('Wingbeats')
 data.read(data="all", setting='read', loadmat=False, labels='nr')
-
+data.split()
 
 # data1 = Dataset('Leafminers')
 # data1.read(data=data1.target_classes[0], setting='read', loadmat=False, labels='nr')
@@ -41,29 +44,19 @@ data.read(data="all", setting='read', loadmat=False, labels='nr')
 # le = LabelEncoder()
 # data['y'] = le.fit_transform(data['y'])
 
-####
-X,y = data.filenames.tolist(), data.y.tolist()
-#values.reshape(-1,1)
+
+X_train, X_test, X_val, y_train, y_test, y_val = data.X_train.tolist(), \
+                                                data.X_test.tolist(), \
+                                                data.X_val.tolist(), \
+                                                data.y_train.tolist(), \
+                                                data.y_test.tolist(), \
+                                                data.y_val.tolist() 
 
 model_name='mosquitoes_final_raw' 
 setting='raw'
 top_weights_path = TEMP_DATADIR + str(model_name) + '.h5'
-targets = len(np.unique(y))
+targets = len(np.unique(data.y))
 batch_size = 32
-
-if False:#undersampling:
-    from imblearn.under_sampling import RandomUnderSampler
-    ros = RandomUnderSampler(random_state=0)
-    ros.fit(X,y)
-    X, y = ros.fit_resample(X,y)
-    X = pd.Series(X.ravel()).tolist()
-    y = pd.Series(y.ravel()).tolist()
-    print('After undersampling: \n{}\n'.format(pd.DataFrame(y).iloc[:,0].value_counts()))
-else:
-    print('Class balance: \n{}\n'.format(pd.DataFrame(y).iloc[:,0].value_counts()))
-
-
-X_train, X_test, X_val, y_train, y_test, y_val = train_test_val_split(X,y, random_state=0)
 
 # Build the Neural Network
 model = Sequential()
@@ -93,12 +86,8 @@ model.add(BatchNormalization())
 model.add(GlobalAveragePooling1D())
 
 model.add(Dropout(0.5))
-model.add(Dense(len(np.unique(y)), activation='softmax'))
+model.add(Dense(targets, activation='softmax'))
 
-#%% [markdown]
-# ## Compile and fit
-
-#%%
 model.compile(loss='categorical_crossentropy',
             optimizer='adam',
             metrics=['accuracy'])
@@ -109,6 +98,7 @@ callbacks_list = [ModelCheckpoint(top_weights_path, monitor = 'val_acc', verbose
     CSVLogger('model_' + str(model_name) + '.log')]
 
 target_names = list(np.unique(data.y))
+
 model.fit_generator(train_generator(X_train, y_train, batch_size=batch_size,
                                    target_names=target_names,
                                    setting=setting),
@@ -131,11 +121,3 @@ loss, acc = model.evaluate_generator(valid_generator(X_test,
 
 print('loss', loss)
 print('Test accuracy:', acc)
-
-from keras.models import model_from_yaml
-# serialize model to YAML
-model_yaml = model.to_yaml()
-with open(TEMP_DATADIR + model_name + "_raw_final.yaml", "w") as yaml_file:
-    yaml_file.write(model_yaml)
-
-

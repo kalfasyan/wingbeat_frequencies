@@ -121,8 +121,8 @@ class Dataset(object):
             df['date_hour'] = df['date'].apply(lambda x: x.hour)
             df['gain'] = df['wavnames'].apply(lambda x: x.split('_')[3:][1])
             if temp_humd:
-                df['temperature'] = pd.to_numeric(df['wavnames'].apply(lambda x: x.split('_')[3:][3]))
-                df['humidity'] = pd.to_numeric(df['wavnames'].apply(lambda x: x.split('_')[3:][5]))
+                df['temperature'] = pd.to_numeric(df['wavnames'].apply(lambda x: x.split('_')[3:][3] if len(x.split('_')[3:])>=3 else np.nan))
+                df['humidity'] = pd.to_numeric(df['wavnames'].apply(lambda x: x.split('_')[3:][5] if len(x.split('_')[3:])>=4 else np.nan))
             if hist_temp:
                 np_hist(df, 'temperature')
             if hist_humd:
@@ -154,9 +154,6 @@ class Dataset(object):
                 df.date.hist(xrot=45)
                 plt.ylabel('Counts of signals')
             self.df_features = df
-
-
-
 
     def get_frequency_peaks(self, filter_signal=False):
         from scipy.signal import find_peaks
@@ -190,18 +187,16 @@ class Dataset(object):
         plt.title('Activity times of {}'.format(self.name))
         plt.show()
     
-    def overview(self):
-        import matplotlib.pyplot as plt
-        print("The dataset has {} target classes:\n{}\n".format(self.nr_classes, self.target_classes))
-        print("-----------------------------\n")
-        print("Class balance:\n{}\n".format(self.y.value_counts()))
-        print("-----------------------------\n")
-        print("Overview of the data:\n{}".format(self.X.head()))
-        print("-----------------------------\n")
-        self.get_frequency_peaks()
-        plt.figure()
-        self.get_sensor_features(hist_date=True, hist_humd=True, hist_temp=True)
-        plt.show()
+    def split(self, random=True):
+        if random:
+            from utils_train import train_test_val_split
+            self.X_train, self.X_test, self.X_val, self.y_train, self.y_test, self.y_val = train_test_val_split(self.filenames, self.y, 
+                                                                                                                random_state=0, 
+                                                                                                                verbose=1, 
+                                                                                                                test_size=0.10, 
+                                                                                                                val_size=0.2)
+        else:
+            pass
 
 
 def read_simple(paths, return_df=False):

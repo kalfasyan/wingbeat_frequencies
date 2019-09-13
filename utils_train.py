@@ -465,17 +465,11 @@ def make_autoencoder_2d():####UNDER CONSTRUCTION####
     # take a look at the reconstructed digits
     decoded_imgs = autoencoder.predict(x_test)
 
-def train_test_val_split(X,y, random_state=0, verbose=1):
+def train_test_val_split(X,y, random_state=0, verbose=1, test_size=0.10, val_size=0.2):
     from sklearn.model_selection import train_test_split
     X, y = shuffle(X, y, random_state=random_state)
-    X_train, X_test, y_train, y_test = train_test_split(X, y, 
-                                                    test_size=0.10,
-                                                    stratify=y, 
-                                                    random_state=0)
-    X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, 
-                                                    test_size=0.2, 
-                                                    stratify=y_train,
-                                                    random_state=0)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, stratify=y, random_state=0)
+    X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size=val_size, stratify=y_train, random_state=0)
     if isinstance(X_train, np.ndarray):
         print("X_train shape: \t{}\nX_test shape:\t{}\nX_val shape:\t{}\n".format(X_train.shape, X_test.shape, X_val.shape))
     return X_train, X_test, X_val, y_train, y_test, y_val
