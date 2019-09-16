@@ -24,9 +24,9 @@ class Dataset(object):
         self.nr_classes = len(self.target_classes)
         self.X = pd.DataFrame()
         self.y = []
-        self.setting = 'read'
+        self.setting = 'raw'
 
-    def read(self, data='all',fext='wav', labels='text', loadmat=True, setting='read'):
+    def read(self, data='all',fext='wav', labels='text', loadmat=True, setting='raw'):
         """
         Function to read wingbeat data with possibility to expand for image data as well.
         """
@@ -65,7 +65,7 @@ class Dataset(object):
         # Reading values of data
         if loadmat:
             # If raw data is needed
-            if setting == 'read':
+            if setting == 'raw':
                 self.X = pd.DataFrame(read_simple(self.filenames)[0])
             # Load data according to setting provided
             else:
@@ -162,7 +162,7 @@ class Dataset(object):
 
         assert hasattr(self, 'X'), 'Load the data first.'
         assert isinstance(self.X, np.ndarray) or isinstance(self.X, pd.DataFrame) 
-        assert self.setting == 'read', "You need to read the raw data to get frequency peaks."
+        assert self.setting == 'raw', "You need to read the raw data to get frequency peaks."
 
         X = self.X.values if isinstance(self.X, pd.DataFrame) else self.X
         freq_range = np.linspace(0, F_S/2, 129)
@@ -201,14 +201,12 @@ class Dataset(object):
             pass
 
 
-def read_simple(paths, return_df=False):
+def read_simple(paths):
     """
     Function to read wav files into a numpy array given their paths.
     It also returns their names for verification purposes.
-    Return a dataframe if return_df is True.
     """
     import soundfile as sf
-    from tqdm import tqdm
     data = []
     names = []
     for _, wavname in enumerate(paths):
@@ -216,9 +214,6 @@ def read_simple(paths, return_df=False):
         data.append(wavdata)
         names.append(wavname)
     datamatrix = np.asarray(data)
-    logging.debug('datamatrix array created')
-    logging.debug('names list created')
-
     return datamatrix, names
 
 def transform_data(X, setting = None):
@@ -273,7 +268,7 @@ def power_spectral_density(data=None, fname=None, only_powers=False, crop=False,
 
 def read_simple_parallel(path):
     import soundfile as sf
-    fname = path.split('/')[-1][:-4]
+    fname = path.split('/')[-1][:-4] # Filename is the last list element of full path without extension (.wav)
     wavdata, _ = sf.read(path)
     wavseries = pd.Series(wavdata)
     wavseries.name = fname
@@ -314,7 +309,7 @@ def make_df_parallel(setting=None, names=None):
     result_list = []
     if setting == 'psd':
         result_list.append(pool.map(power_spectral_density_parallel, names))
-    elif setting == 'read':
+    elif setting == 'raw':
         result_list.append(pool.map(read_simple_parallel, names))
     elif setting == 'spectrograms':
         result_list.append(pool.map(transform_data_parallel_spectograms, names))
@@ -352,7 +347,7 @@ def process_signal(data=None, fname=None, plot=False):
     results['pow1'], results['fr1'], peak1 = get_harmonic(psd, peaks, h=1)
     results['pow2'], results['fr2'], peak2 = get_harmonic(psd, peaks, h=2)
 
-    # TODO: make this pass a dictionary only with a string.format for the 0/1/2
+    # TODO_IDEA: make this pass a dictionary only with a string.format for the 0/1/2
     results['damping_0'] = damping_ratio(fund_freq=results['fr0'], fund_amp=results['pow0'], psd=psd, peak_idx=peak0)
     results['damping_1'] = damping_ratio(fund_freq=results['fr1'], fund_amp=results['pow1'], psd=psd, peak_idx=peak1)
     results['damping_2'] = damping_ratio(fund_freq=results['fr2'], fund_amp=results['pow2'], psd=psd, peak_idx=peak2)
