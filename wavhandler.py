@@ -94,6 +94,7 @@ class Dataset(object):
             np_hist(self.X, 'var')
 
         self.X, self.y = self.X.loc[inds].drop('var',axis=1).dropna(), self.y.loc[inds].dropna()
+        self.filenames = self.filenames.loc[inds]
 
     def select_class(self, selection=None, fext='wav'):
         if not selection is None:

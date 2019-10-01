@@ -152,7 +152,7 @@ def get_classifier(name):
         classifier = KNeighborsClassifier(n_neighbors = 14, metric = 'minkowski', p = 2)
     elif name == 'rf':
         from sklearn.ensemble import RandomForestClassifier
-        classifier = RandomForestClassifier(n_estimators = 100, n_jobs=-1, criterion = 'gini', random_state = 0)#, class_weight='balanced')
+        classifier = RandomForestClassifier(n_estimators = 325, n_jobs=-1, criterion = 'gini', random_state = 0, class_weight='balanced')
     elif name == 'svm':
         from sklearn.svm import SVC
         classifier = SVC(kernel='linear', random_state = 0)
@@ -164,7 +164,7 @@ def get_classifier(name):
         classifier = ExtraTreesClassifier(n_estimators=80, random_state=0)
     elif name == 'xgboost':
         from xgboost import XGBClassifier
-        classifier = XGBClassifier(n_estimators=325, n_jobs=-1, random_state=0)
+        classifier = XGBClassifier(n_estimators=325, n_jobs=-1, random_state=0, class_weight='balanced')
     elif name == 'adaboost':
         from sklearn.ensemble import AdaBoostClassifier
         from sklearn.tree import DecisionTreeClassifier
