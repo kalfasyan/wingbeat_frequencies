@@ -15,7 +15,7 @@ import warnings
 import logging
 import math
 from utils import crop_rec
-from keras.utils import np_utils
+# from keras.utils import np_utils
 
 class TrainConfiguration(object):
     """ Configuration for training procedures. Contains all settings """

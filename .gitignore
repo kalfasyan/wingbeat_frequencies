@@ -109,3 +109,4 @@ venv.bak/
 # my ignores
 /temp_data
 /supervised/deprecated
+Jupyter_Notebooks/temp_data/
