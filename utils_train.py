@@ -8,14 +8,12 @@ import seaborn as sns
 import cv2
 from scipy import signal
 from sklearn.metrics import confusion_matrix
-# from keras.utils import np_utils
-# from keras.preprocessing import image
 from sklearn.utils import shuffle
 import warnings
 import logging
 import math
 from utils import crop_rec
-# from keras.utils import np_utils
+from tensorflow.keras import utils
 
 class TrainConfiguration(object):
     """ Configuration for training procedures. Contains all settings """
@@ -96,7 +94,7 @@ def train_generator(X_train, y_train, batch_size, target_names, setting='stft'):
             x_batch = np.array(x_batch, np.float32)
             y_batch = np.array(y_batch, np.float32)
             
-            y_batch = np_utils.to_categorical(y_batch, len(target_names))
+            y_batch = utils.to_categorical(y_batch, len(target_names))
             
             yield x_batch, y_batch
 
@@ -126,7 +124,7 @@ def valid_generator(X_val, y_val, batch_size, target_names, setting='stft'):
             x_batch = np.array(x_batch, np.float32)
             y_batch = np.array(y_batch, np.float32)
 
-            y_batch = np_utils.to_categorical(y_batch, len(target_names))
+            y_batch = utils.to_categorical(y_batch, len(target_names))
 
             yield x_batch, y_batch
 
