@@ -285,3 +285,41 @@ def np_hist(df, col, res=0.1, rot=45, fs=12):
     plt.xticks(rotation=rot, fontsize=fs);
     plt.yticks(fontsize=fs);
     plt.show()
+
+def process_signal(data=None, fname=None, plot=False):
+    specs = {}
+    results = {
+        'pow0': np.nan,
+        'pow1': np.nan,
+        'pow2': np.nan,
+        'fr0': np.nan,
+        'fr1': np.nan,
+        'fr2': np.nan,
+        'damping_0': np.nan,
+        'damping_1': np.nan,
+        'damping_2': np.nan,
+    }
+    # Calculate the power spectral density
+    psd = power_spectral_density(data=data, fname=None, only_powers=False,crop=False)
+    if psd is None:
+        specs[fname] = results
+        return specs
+
+    peaks = peak_finder(psd, min_freq=300.)
+    results['pow0'], results['fr0'], peak0 = get_harmonic(psd, peaks, h=0)
+    results['pow1'], results['fr1'], peak1 = get_harmonic(psd, peaks, h=1)
+    results['pow2'], results['fr2'], peak2 = get_harmonic(psd, peaks, h=2)
+
+    # TODO_IDEA: make this pass a dictionary only with a string.format for the 0/1/2
+    results['damping_0'] = damping_ratio(fund_freq=results['fr0'], fund_amp=results['pow0'], psd=psd, peak_idx=peak0)
+    results['damping_1'] = damping_ratio(fund_freq=results['fr1'], fund_amp=results['pow1'], psd=psd, peak_idx=peak1)
+    results['damping_2'] = damping_ratio(fund_freq=results['fr2'], fund_amp=results['pow2'], psd=psd, peak_idx=peak2)
+
+    if plot:
+        import matplotlib.pyplot as plt
+        plt.figure(figsize=(24,6))
+        plt.subplot(2,1,1); plt.plot(data); plt.title('raw')
+        plt.subplot(2,1,2); plt.plot(psd.frequency, psd.pow_amp); plt.title('psd')
+
+    specs[fname] = results
+    return specs

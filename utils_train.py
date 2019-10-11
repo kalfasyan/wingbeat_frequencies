@@ -12,21 +12,36 @@ from sklearn.utils import shuffle
 import warnings
 import logging
 import math
-from utils import crop_rec
+from utils import crop_rec, TEMP_DATADIR
 from tensorflow.keras import utils
 
 class TrainConfiguration(object):
     """ Configuration for training procedures. Contains all settings """
-    def __init__(self, model_name='test', batch_size=32, monitor='val_acc', es_patience=7, rlr_patience=3):
+    def __init__(self, X=[], y=[], setting='raw', model_name='test', batch_size=32, monitor='val_accuracy', 
+                es_patience=7, rlr_patience=3, epochs=100):
+        from tensorflow.keras.models import Sequential
+        from tensorflow.keras.layers import Dense, Dropout, Activation
+        from tensorflow.keras.layers import Conv1D, GlobalAveragePooling1D, MaxPooling1D
+        from tensorflow.keras.optimizers import SGD
+        from tensorflow.keras.layers import BatchNormalization
+        from sklearn.model_selection import train_test_split
+        from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping, ReduceLROnPlateau, CSVLogger
+        from tensorflow.keras.utils import to_categorical
+        from tensorflow.keras import utils
+
         super(TrainConfiguration, self).__init__()
 
+        self.X = X
+        self.y = y
+        self.setting = setting
         self.model_name = model_name
-        self.top_weights_path = TEMP_DATA_DIR + str(self.model_name) + '.h5'
-        self.logfile = TEMP_DATA_DIR + str(self.model_name) + '.log'
+        self.top_weights_path = TEMP_DATADIR + str(self.model_name) + '.h5'
+        self.logfile = TEMP_DATADIR + str(self.model_name) + '.log'
         self.batch_size = batch_size
         self.monitor = monitor
         self.es_patience = es_patience
         self.rlr_patience = rlr_patience
+        self.epochs = epochs
         self.target_names = np.unique(y)
         self.callbacks_list = [ModelCheckpoint(monitor = self.monitor,
                                     filepath = self.top_weights_path,
