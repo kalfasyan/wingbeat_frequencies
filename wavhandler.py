@@ -83,7 +83,7 @@ class Dataset(object):
         else:
             raise ValueError('Wrong value given for labels argument.')
 
-    def clean(self, threshold=10, plot=True):
+    def clean(self, threshold=10, plot=False):
         assert self.setting == 'psd_dB', "Cleaning works with psd_dB setting"
 
         self.filenames.reset_index(drop=True, inplace=True)
@@ -96,6 +96,7 @@ class Dataset(object):
 
         self.X, self.y = self.X.loc[inds].drop('var',axis=1).dropna(), self.y.loc[inds].dropna()
         self.filenames = self.filenames.loc[inds]
+        print("{} filenames after cleaning.".format(len(self.filenames)))
 
     def select_class(self, selection=None, fext='wav'):
         if not selection is None:
