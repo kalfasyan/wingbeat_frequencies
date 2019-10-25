@@ -486,3 +486,50 @@ def train_test_val_split(X,y, random_state=0, verbose=1, test_size=0.10, val_siz
     if isinstance(X_train, np.ndarray):
         print("X_train shape: \t{}\nX_test shape:\t{}\nX_val shape:\t{}\n".format(X_train.shape, X_test.shape, X_val.shape))
     return X_train, X_test, X_val, y_train, y_test, y_val
+
+def test_inds(dataset, dates=[], plot=True, figsize=(20,4)):
+    # Return indexes for given dates list (dates in tuples)
+    import datetime
+    if len(dates):
+        # Read all sensor features for given Dataset
+        dataset.get_sensor_features();
+        # Create dataframe with date column
+        df = dataset.df_features[['filenames','datestr']]
+        if plot:
+            # Make a histogram that shows counts for each day/month combination
+            df.groupby('datestr').count().plot(kind="bar", figsize=figsize)
+        # Count and collect signals for specified dates 
+        lst = []
+        for dt, sub in df.groupby("datestr"):
+            if dt in dates:
+                lst = lst + sub.index.tolist()
+    print("{} test data.".format(len(lst)))
+    return np.array(lst)
+
+def test_days(dataset, pct=0.1):
+    dataset.get_sensor_features();
+    df = dataset.df_features
+    total = df.shape[0]
+    day_counts = []
+    daystrings = []
+    for dt, sub in df.groupby('datestr'):
+        day_counts.append(sub.shape[0])
+        daystrings.append(dt)
+
+    series = pd.Series(day_counts)
+
+    for w in range(len(day_counts)):
+        z = series.rolling(window=w).sum().apply(lambda x: x> pct*total)
+        last_ind = z.last_valid_index()
+        if z[w]:
+            break
+    early_days = daystrings[0:w]
+
+    for w in range(len(day_counts)):
+        z = series.rolling(window=w).sum().apply(lambda x: x> pct*total)
+        last_ind = z.last_valid_index()
+        if z[last_ind]:
+            break
+    late_days = daystrings[last_ind-w : last_ind]
+    
+    return early_days, late_days
