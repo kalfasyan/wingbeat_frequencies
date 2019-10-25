@@ -88,7 +88,7 @@ class Dataset(object):
 
         self.filenames.reset_index(drop=True, inplace=True)
         self.y.index = list(self.y.reset_index(drop=True).index)
-        self.X['var'] = self.X.apply(lambda x: x.iloc[10:50].var(), axis=1)
+        self.X['var'] = self.X.apply(lambda x: x.iloc[4:].var(), axis=1)
         inds = self.X[(self.X['var'] > threshold)].index
 
         if plot:
