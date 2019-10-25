@@ -83,7 +83,7 @@ class Dataset(object):
         else:
             raise ValueError('Wrong value given for labels argument.')
 
-    def clean(self, threshold=10, plot=True):
+    def clean(self, threshold=10, plot=False):
         assert self.setting == 'psd_dB', "Cleaning works with psd_dB setting"
 
         self.filenames.reset_index(drop=True, inplace=True)
@@ -96,6 +96,7 @@ class Dataset(object):
 
         self.X, self.y = self.X.loc[inds].drop('var',axis=1).dropna(), self.y.loc[inds].dropna()
         self.filenames = self.filenames.loc[inds]
+        print("{} filenames after cleaning.".format(len(self.filenames)))
 
     def select_class(self, selection=None, fext='wav'):
         if not selection is None:
@@ -159,7 +160,7 @@ class Dataset(object):
                 plt.ylabel('Counts of signals')
             self.df_features = df
 
-    def get_frequency_peaks(self, filter_signal=False):
+    def get_frequency_peaks(self, filter_signal=False, lcut=L_CUTOFF, hcut=H_CUTOFF, fs=F_S):
         from scipy.signal import find_peaks
 
         assert hasattr(self, 'X'), 'Load the data first.'
@@ -177,7 +178,7 @@ class Dataset(object):
             peaks, _ = find_peaks(sig_tr)
             freqs = freqs + freq_range[peaks].tolist()
         df = pd.DataFrame(pd.to_numeric(pd.Series(freqs)), columns=['freqs'])
-        df = df[df['freqs'] < 500]
+        df = df[df['freqs'] < 450]
         np_hist(df,'freqs')
         
     def plot_activity_times(self):
@@ -239,8 +240,8 @@ def transform_data(X, setting = None):
             X = X.reshape(1,-1)
         XX = np.zeros((X.shape[0],129)).astype("float32")   # allocate space
         for i in tqdm(range(X.shape[0]), disable=DISABLE_TQDM):
-            XX[i] = 10*np.log10(signal.welch(X[i], fs=F_S, window='hanning', nperseg=256, noverlap=128+64)[1])
-            # XX[i] = power_spectral_density(X[i], only_powers=True)
+            # XX[i] = 10*np.log10(signal.welch(X[i], fs=F_S, window='hanning', nperseg=256, noverlap=128+64)[1])
+            XX[i] = power_spectral_density(X[i], only_powers=True)
     return XX.squeeze()
 
 def power_spectral_density(data=None, fname=None, only_powers=False, crop=False, bandpass=False,
