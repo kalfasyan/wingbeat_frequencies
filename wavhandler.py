@@ -240,8 +240,8 @@ def transform_data(X, setting = None):
             X = X.reshape(1,-1)
         XX = np.zeros((X.shape[0],129)).astype("float32")   # allocate space
         for i in tqdm(range(X.shape[0]), disable=DISABLE_TQDM):
-            # XX[i] = 10*np.log10(signal.welch(X[i], fs=F_S, window='hanning', nperseg=256, noverlap=128+64)[1])
-            XX[i] = power_spectral_density(X[i], only_powers=True)
+            XX[i] = 10*np.log10(signal.welch(X[i], fs=F_S, window='hanning', nperseg=256, noverlap=128+64)[1])
+            # XX[i] = power_spectral_density(X[i], only_powers=True)
     return XX.squeeze()
 
 def power_spectral_density(data=None, fname=None, only_powers=False, crop=False, bandpass=False,
