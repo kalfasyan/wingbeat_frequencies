@@ -88,13 +88,14 @@ class Dataset(object):
 
         self.filenames.reset_index(drop=True, inplace=True)
         self.y.index = list(self.y.reset_index(drop=True).index)
-        self.X['var'] = self.X.apply(lambda x: x.iloc[4:].var(), axis=1)
-        inds = self.X[(self.X['var'] > threshold)].index
+        self.X['var_fly_vs_walk'] = self.X.apply(lambda x: x.iloc[4:].var(), axis=1)
+        self.X['var_interference'] = self.X.apply(lambda x: x.iloc[:5].var(), axis=1)
+        inds = self.X[(self.X['var_fly_vs_walk'] > threshold) & (self.X['var_interference'] > 89)].index
 
         if plot:
             np_hist(self.X, 'var')
 
-        self.X, self.y = self.X.loc[inds].drop('var',axis=1).dropna(), self.y.loc[inds].dropna()
+        self.X, self.y = self.X.loc[inds].drop('var_fly_vs_walk',axis=1).dropna(), self.y.loc[inds].dropna()
         self.filenames = self.filenames.loc[inds]
         print("{} filenames after cleaning.".format(len(self.filenames)))
 

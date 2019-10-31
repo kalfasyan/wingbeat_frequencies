@@ -25,11 +25,21 @@ def butter_bandpass_filter(data, lowcut, highcut, fs, order):
     y = lfilter(b, a, data)
     return y
 
-def butter_dataframe(df, lowcut, highcut, fs, order=4):
+def butter_bandpass_dataframe(df, lowcut, highcut, fs, order=4):
     for col in df:
         y = butter_bandpass_filter(df[col].values, lowcut, highcut, fs, order=4)
         df[col] = y
     return df
+
+def butter_highpass_filter(data, cutoff, fs, order=5):
+    from scipy.signal import butter, lfilter, filtfilt
+
+    nyq = 0.5 * fs
+    normal_cutoff = cutoff / nyq
+
+    b, a = signal.butter(order, normal_cutoff, btype='high', analog=False)
+    y = signal.filtfilt(b, a, data)
+    return y
 
 def crop_signal(data, window=300, intens_threshold=0.0004, offset=250):
     import more_itertools as mit
