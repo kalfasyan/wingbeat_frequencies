@@ -25,6 +25,8 @@ class Dataset(object):
         self.X = pd.DataFrame()
         self.y = []
         self.setting = 'raw'
+        self.cleaned = False
+        self.sensor_features = False
 
     def read(self, data='all',fext='wav', labels='text', loadmat=True, setting='raw'):
         """
@@ -83,21 +85,36 @@ class Dataset(object):
         else:
             raise ValueError('Wrong value given for labels argument.')
 
-    def clean(self, threshold=10, plot=False):
+    def clean(self, threshold=10, threshold_interf=89, plot=False):
         assert self.setting == 'psd_dB', "Cleaning works with psd_dB setting"
 
         self.filenames.reset_index(drop=True, inplace=True)
         self.y.index = list(self.y.reset_index(drop=True).index)
         self.X['var_fly_vs_walk'] = self.X.apply(lambda x: x.iloc[4:].var(), axis=1)
         self.X['var_interference'] = self.X.apply(lambda x: x.iloc[:5].var(), axis=1)
-        inds = self.X[(self.X['var_fly_vs_walk'] > threshold) & (self.X['var_interference'] > 89)].index
+        inds = self.X[(self.X['var_fly_vs_walk'] > threshold) & (self.X['var_interference'] > threshold_interf)].index
 
         if plot:
             np_hist(self.X, 'var')
 
-        self.X, self.y = self.X.loc[inds].drop('var_fly_vs_walk',axis=1).dropna(), self.y.loc[inds].dropna()
+        self.X, self.y = self.X.loc[inds].drop(['var_fly_vs_walk', 
+                                                'var_interference'],axis=1).dropna(), self.y.loc[inds].dropna()
         self.filenames = self.filenames.loc[inds]
+        self.cleaned = True
         print("{} filenames after cleaning.".format(len(self.filenames)))
+
+    def get_night_signals(self, after=21, before=8):
+        assert self.setting == 'psd_dB', "This works with psd_dB setting only"
+        assert self.cleaned == True, "This works with cleaned datasets only"
+        assert self.sensor_features == True, "Retrieve sensor features first"
+
+        sub = self.df_features
+        inds = sub[(sub.date_hour >= after) | (sub.date_hour <= before)].index.values
+
+        self.filenames = self.filenames.loc[inds]
+        self.X = self.X.loc[inds]
+        self.y = self.y.loc[inds]
+        print("{} night signal filenames.".format(len(self.filenames)))
 
     def select_class(self, selection=None, fext='wav'):
         if not selection is None:
@@ -160,6 +177,9 @@ class Dataset(object):
                 df.date.hist(xrot=45)
                 plt.ylabel('Counts of signals')
             self.df_features = df
+        else:
+            print("No sensor features collected. Select valid version")
+        self.sensor_features = True
 
     def get_frequency_peaks(self, filter_signal=False, lcut=L_CUTOFF, hcut=H_CUTOFF, fs=F_S):
         from scipy.signal import find_peaks
