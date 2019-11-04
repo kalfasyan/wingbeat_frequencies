@@ -86,6 +86,8 @@ class Dataset(object):
             raise ValueError('Wrong value given for labels argument.')
 
     def clean(self, threshold=10, threshold_interf=89, plot=False):
+        # TODO: Make this function read with multiprocessing the psd_dB, then return cleaned filenames etc.
+        # just like remove pests
         assert self.setting == 'psd_dB', "Cleaning works with psd_dB setting"
 
         self.filenames.reset_index(drop=True, inplace=True)
@@ -102,6 +104,40 @@ class Dataset(object):
         self.filenames = self.filenames.loc[inds]
         self.cleaned = True
         print("{} filenames after cleaning.".format(len(self.filenames)))
+
+    def remove_f0_range(self, low=95, high=105):
+        from scipy import signal as sg
+        from scipy.signal import find_peaks
+
+        assert self.cleaned, "Needs to be cleaned first."
+        if not hasattr(self, 'psd'):
+            self.psd = make_df_parallel(names=self.filenames.tolist(), setting='psd')
+        inds = []
+        for i in range(len(self.psd)):
+            peaks, _ = find_peaks(self.psd.iloc[i].values)
+            if not len(np.where((peaks > low) & (peaks < high))[0]):
+                inds.append(i)
+        inds = np.array(inds)
+        self.filenames, self.X, self.y = self.filenames.iloc[inds], self.X.iloc[inds], self.y.iloc[inds]
+        print("{} filenames after removing interference.".format(len(self.filenames)))
+
+    def make_array(self, setting=None):
+        assert hasattr(self, 'filenames'), "Read data first"
+        if setting == 'raw':
+            self.raw = make_df_parallel(names=self.filenames.tolist(), setting=setting)
+            return self.raw
+        elif setting == 'psd':
+            self.psd = make_df_parallel(names=self.filenames.tolist(), setting=setting)
+            return self.psd
+        elif setting == 'psd_dB':
+            self.psd_dB = make_df_parallel(names=self.filenames.tolist(), setting=setting)
+            return self.psd_dB
+        elif setting == 'spectrograms':
+            self.specs = make_df_parallel(names=self.filenames.tolist(), setting=setting)
+            return self.specs
+        else:
+            raise ValueError('No such setting exists / is implemented')
+
 
     def get_night_signals(self, after=21, before=8):
         assert self.setting == 'psd_dB', "This works with psd_dB setting only"
@@ -216,11 +252,14 @@ class Dataset(object):
     def split(self, random=True):
         if random:
             from utils_train import train_test_val_split
-            self.X_train, self.X_test, self.X_val, self.y_train, self.y_test, self.y_val = train_test_val_split(self.filenames, self.y, 
-                                                                                                                random_state=0, 
-                                                                                                                verbose=1, 
-                                                                                                                test_size=0.10, 
-                                                                                                                val_size=0.2)
+            self.X_train, self.X_test, \
+                self.X_val, self.y_train, \
+                    self.y_test, self.y_val = train_test_val_split(self.filenames, 
+                                                                    self.y, 
+                                                                    random_state=0, 
+                                                                    verbose=1, 
+                                                                    test_size=0.10, 
+                                                                    val_size=0.2)
         else:
             pass
 
@@ -326,13 +365,23 @@ def power_spectral_density_parallel(path):
     psd_pow_amps.name = fname
     return psd_pow_amps
 
+def transform_data_parallel_psd(path):
+    from scipy import signal as sg
+    x, _ = read_simple([path])
+    f,p = sg.welch(x.ravel(), fs=8000, scaling='density', window='hanning', nfft=8128, nperseg=256, noverlap=128+64)
+    p = pd.Series(p[:1000])
+    p.index = f[:1000]
+    return p
+
 def make_df_parallel(setting=None, names=None):
     import multiprocessing
     cpus = multiprocessing.cpu_count()
     pool = multiprocessing.Pool(processes=cpus)
     result_list = []
-    if setting == 'psd':
+    if setting == 'psd_old':
         result_list.append(pool.map(power_spectral_density_parallel, names))
+    elif setting == 'psd':
+        result_list.append(pool.map(transform_data_parallel_psd, names))
     elif setting == 'raw':
         result_list.append(pool.map(read_simple_parallel, names))
     elif setting == 'spectrograms':
