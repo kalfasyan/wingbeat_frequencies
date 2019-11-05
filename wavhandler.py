@@ -38,21 +38,22 @@ class Dataset(object):
         assert isinstance(data, str) or isinstance(data, int), "Unsupported format for data. Give str or int."
         all_data = list(glob.iglob(self.directory + '/**/*.{}'.format(fext), recursive=True))
 
-        # Reading Filenames of data
-        # Load ALL data of dataset
-        if data=='all': 
-            self.filenames = all_data
-        # Load only specified class
-        elif data in self.target_classes: 
-            tmpfnames = pd.Series(glob.iglob(self.directory + '/**/*.{}'.format(fext), recursive=True))
-            basedirlen = len(self.base_dir.split('/'))
-            self.filenames = tmpfnames[tmpfnames.apply(lambda x: x.split('/')[basedirlen]) == data]
+        ## Reading Filenames of data
+        # In case a string is provided
+        if isinstance(data, str):
+            assert data in self.target_classes + ['all'], 'Wrong species given / not understood'
+            if data=='all': 
+                self.filenames = all_data
+            # Load only specified class
+            else:
+                tmpfnames = pd.Series(glob.iglob(self.directory + '/**/*.{}'.format(fext), recursive=True))
+                basedirlen = len(self.base_dir.split('/'))
+                self.filenames = tmpfnames[tmpfnames.apply(lambda x: x.split('/')[basedirlen]) == data]
+                
         # In case an integer is provided
-        elif data < 0:
-            raise ValueError("Provide a positive integer for number of data")
-        # Load part of data 
-        else:
-            self.filenames = all_data
+        elif isinstance(data, int):
+            if data < 0:
+                raise ValueError("Provide a positive integer for number of data")
             # If given number is smaller than total
             if data < len(self.filenames):
                 self.filenames = random.sample(self.filenames, data)
@@ -64,17 +65,12 @@ class Dataset(object):
         self.filenames = pd.Series(self.filenames)
         print("Data: {}.\nRead {} filenames in {:.2f} seconds.".format(data, len(self.filenames) ,time.time() - tic))
 
-        # Reading values of data
+        ## Reading data into a matrix
         if loadmat:
-            # If raw data is needed
-            if setting == 'raw':
-                self.X = pd.DataFrame(read_simple(self.filenames)[0])
-            # Load data according to setting provided
-            else:
-                self.X = make_df_parallel(names=self.filenames, setting=setting)
+            self.X = self.make_array(setting=setting)
             print("Loaded data into matrix in {:.2f} seconds.".format(time.time()-tic))
 
-        # Reading labels
+        ## Reading labels
         if labels=='text':
             self.y = pd.Series(self.filenames).apply(lambda x: x.split('/')[x.split('/').index(self.name)+1])
         elif labels=='nr':
@@ -85,7 +81,7 @@ class Dataset(object):
         else:
             raise ValueError('Wrong value given for labels argument.')
 
-    def clean(self, threshold=10, threshold_interf=89, plot=False):
+    def clean(self, threshold=10, threshold_interf=0, plot=False):
         # TODO: Make this function read with multiprocessing the psd_dB, then return cleaned filenames etc.
         # just like remove pests
         assert self.setting == 'psd_dB', "Cleaning works with psd_dB setting"
@@ -414,7 +410,7 @@ def get_wingbeat_timestamp(path):
     import pandas as pd
     fname = path.split('/')[-1]
     t = fname.split('_')[0] + fname.split('_')[1]
-    return pd.to_datetime(t, format='F%y%m%d%H%M%S').hour
+    return pd.to_datetime(t, format='F%y%m%d%H%M%S')
 
 def merge_datasets_to_dict(dst1, dst2, namedtuple=False):
     
