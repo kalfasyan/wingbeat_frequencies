@@ -31,6 +31,8 @@ class Dataset(object):
     def read(self, data='all',fext='wav', labels='text', loadmat=True, setting='raw'):
         """
         Function to read wingbeat data with possibility to expand for image data as well.
+        Choice of whether to get text labels or encoded numerical values.
+        If loatmat is True, then it will load data, depending on the setting provided, into a matrix.
         """
         import time
         self.setting = setting
@@ -82,6 +84,9 @@ class Dataset(object):
             raise ValueError('Wrong value given for labels argument.')
 
     def clean(self, threshold=10, threshold_interf=0, plot=False):
+        """
+        Cleans the dataset depending on the variance of their spectrum.
+        """
         # TODO: Make this function read with multiprocessing the psd_dB, then return cleaned filenames etc.
         # just like remove pests
         assert self.setting == 'psd_dB', "Cleaning works with psd_dB setting"
@@ -102,6 +107,10 @@ class Dataset(object):
         print("{} filenames after cleaning.".format(len(self.filenames)))
 
     def remove_f0_range(self, low=95, high=105):
+        """
+        Given a range from low to high, calculate the PSD of all signals 
+        and remove those that have a peak withing this range.
+        """
         from scipy import signal as sg
         from scipy.signal import find_peaks
 
@@ -118,6 +127,10 @@ class Dataset(object):
         print("{} filenames after removing interference.".format(len(self.filenames)))
 
     def make_array(self, setting=None):
+        """
+        Makes use of make_df_parallel which creates a pandas Dataframe using the multiprocessing 
+        library for parallel computation. Depending on the setting, a different Dataframe is created.
+        """
         assert hasattr(self, 'filenames'), "Read data first"
         if setting == 'raw':
             self.raw = make_df_parallel(names=self.filenames.tolist(), setting=setting)
@@ -136,6 +149,9 @@ class Dataset(object):
 
 
     def get_night_signals(self, after=21, before=8):
+        """
+        Select signal waveform in a specific time interval i.e. 'before' some time and 'after' some time.
+        """
         assert self.setting == 'psd_dB', "This works with psd_dB setting only"
         assert self.cleaned == True, "This works with cleaned datasets only"
         assert self.sensor_features == True, "Retrieve sensor features first"
@@ -163,6 +179,10 @@ class Dataset(object):
             raise ValueError("Wrong selection given.")        
 
     def get_sensor_features(self, version='1',temp_humd=True, hist_temp=False, hist_humd=False, hist_date=False):
+        """
+        Since the stored filenames contain metadata, this function gets all these features and 
+        constructs a pandas Dataframe with them.
+        """
         assert hasattr(self, 'filenames')
         df = pd.DataFrame(self.filenames, columns=['filenames'])
         df['wavnames'] = df['filenames'].apply(lambda x: x.split('/')[-1][:-4])
@@ -214,6 +234,9 @@ class Dataset(object):
         self.sensor_features = True
 
     def get_frequency_peaks(self, filter_signal=False, lcut=L_CUTOFF, hcut=H_CUTOFF, fs=F_S):
+        """
+        Creates a histogram plot with counts of dominant frequencies.
+        """
         from scipy.signal import find_peaks
 
         assert hasattr(self, 'X'), 'Load the data first.'
@@ -235,6 +258,9 @@ class Dataset(object):
         np_hist(df,'freqs')
         
     def plot_activity_times(self):
+        """
+        Plots the activity times of all data in the Dataset. Useful when selecting specific species.
+        """
         import matplotlib.pyplot as plt
         df = pd.DataFrame(self.filenames.apply(lambda x: get_wingbeat_timestamp(x)).value_counts())
         df['counts'] = df[0]
