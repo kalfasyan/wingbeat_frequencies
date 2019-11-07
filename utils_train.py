@@ -1,6 +1,7 @@
 from utils import TEMP_DATADIR, SR, HOP_LEN, N_FFT, H_CUTOFF, F_S, L_CUTOFF, B_ORDER
 import pandas as pd
 import numpy as np
+np.random.seed(42)
 import librosa
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -434,6 +435,7 @@ def make_autoencoder_2d():####UNDER CONSTRUCTION####
     from keras.callbacks import TensorBoard
     from keras import backend as K
     import numpy as np
+    np.random.seed(42)
     import matplotlib.pyplot as plt
     import pickle
 

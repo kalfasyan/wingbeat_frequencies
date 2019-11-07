@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+np.random.seed(42)
 from scipy import signal
 import logging
 import os
@@ -288,6 +289,7 @@ def perform_analysis(X, y, setting='pca'):
 def np_hist(df, col, res=0.1, rot=45, fs=12):
     import matplotlib.pyplot as plt
     import numpy as np
+    np.random.seed(42)
     values = df[col]
     _bins, _edges = np.histogram(values, np.arange(df[col].min(), df[col].max(), res))
     plt.plot(_edges[:len(_edges)-1], _bins)

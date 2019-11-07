@@ -1,4 +1,5 @@
 import numpy as np
+np.random.seed(42)
 import glob, os
 from natsort import natsorted
 import pandas as pd
