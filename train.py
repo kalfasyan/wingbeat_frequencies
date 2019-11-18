@@ -13,7 +13,10 @@ np.random.seed(42)
 
 
 model = sys.argv[1]
-print(f"RUNNING CLASSIFICATION WITH {model} MODEL")
+setting = sys.argv[2]
+assert setting in ['psd_dB','raw'], 'Wrong setting given'
+
+print(f"RUNNING CLASSIFICATION WITH {model} MODEL and {setting} setting")
 
 data = Dataset('Wingbeats')
 print(data.target_classes)
@@ -57,9 +60,8 @@ print(vcounts)
 
 t = time.time()
 print("Reading data into dataframes in parallel.")
-df_train = make_df_parallel(setting='psd_dB', names=X_train+X_val)
-# df_val = make_df_parallel(setting='psd_dB', names=X_val)
-df_test = make_df_parallel(setting='psd_dB', names=X_test)
+df_train = make_df_parallel(setting=setting, names=X_train+X_val)
+df_test = make_df_parallel(setting=setting, names=X_test)
 print(f"{time.time() - t} seconds")
 
 y_train = y_train + y_val
@@ -149,5 +151,5 @@ print(f'Balanced Accuracy Score: {ac}')
 t = time.time()
 print("Saving model")
 from joblib import dump, load
-dump(classifier, f'{model}_{ac:.2f}.joblib') 
+dump(classifier, f'temp_data/{model}_{ac:.2f}.joblib') 
 print(f"Saved model in {time.time() - t} seconds")
