@@ -1,174 +1,153 @@
-
+#!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
-
-
-# get_ipython().run_line_magic('reset', '-f')
-import pandas as pd
-import numpy as np
-seed = 2018
-np.random.seed(seed)
+import sys
 from wavhandler import *
-import soundfile as sf
-import matplotlib.pyplot as plt
-import seaborn as sns
-import librosa
-import math
-import warnings
-from utils_train import *
-from keras.applications.densenet import DenseNet121
-from sklearn.model_selection import train_test_split
+from pandas.plotting import register_matplotlib_converters
+from utils_train import test_inds, test_days
+register_matplotlib_converters()
+import numpy as np
+import time
+
+np.random.seed(42)
+
+
+model = sys.argv[1]
+print(f"RUNNING CLASSIFICATION WITH {model} MODEL")
+
+data = Dataset('Wingbeats')
+print(data.target_classes)
+
+data.read('Ae. aegypti', loadmat=False)
+x1 = data.filenames.sample(14800)
+data.read('Ae. albopictus', loadmat=False)
+x2 = data.filenames.sample(14800)
+data.read('An. arabiensis', loadmat=False)
+x3 = data.filenames.sample(14800)
+data.read('An. gambiae', loadmat=False)
+x4 = data.filenames.sample(14800)
+data.read('C. pipiens', loadmat=False)
+x5 = data.filenames.sample(14800)
+data.read('C. quinquefasciatus', loadmat=False)
+x6 = data.filenames.sample(14800)
+
+X = pd.concat([x1, x2, x3, x4, x5, x6], axis=0)
+y = X.apply(lambda x: x.split('/')[len(BASE_DIR.split('/'))])
+
 from sklearn.preprocessing import LabelEncoder
-from keras.layers import Input
-from keras.callbacks import ModelCheckpoint, EarlyStopping, ReduceLROnPlateau, CSVLogger
-from keras.utils import np_utils
 
-sns.set()
-# get_ipython().run_line_magic('matplotlib', 'inline')
+le = LabelEncoder()
+y = le.fit_transform(y)
 
+from sklearn.utils import shuffle
+from utils_train import train_test_val_split
 
-# # Loading data
+X,y = shuffle(X.tolist(),y.tolist(), random_state=0)
 
-# In[2]:
-
-
-current_model = DenseNet121
-
-setting = 'stft'
-if setting in ['gasf','gadf', 'mtf', 'rp']:
-    input_shape = (150,150,1)
-elif setting=='stft':
-    input_shape = (129, 120, 1)
-
-model_name = 'LG' + '_' + setting + '_' + current_model.__name__
-top_weights_path = TEMP_DATADIR + 'model_' + str(model_name) + '.h5'
-logfile = TEMP_DATADIR + 'model_' + str(model_name) + '.log'
-
-batch_size = 32
-monitor = 'val_acc'
-es_patience = 7
-rlr_patience = 3
+X_train, X_test, X_val, y_train, y_test, y_val = train_test_val_split(X,y,test_size=0.13514, val_size=0.2)
 
 
-# In[3]:
+keys = pd.Series(le.inverse_transform(y_train)).value_counts().index.tolist()
+values = pd.Series(y_train).value_counts().index.tolist()
+mapping = dict(zip(keys, values))
+print(sorted(mapping.items(), key=lambda x: x[1]))
+vcounts = pd.Series(y_train).value_counts()
+vcounts.index = mapping.keys()
+print(vcounts)
+
+t = time.time()
+print("Reading data into dataframes in parallel.")
+df_train = make_df_parallel(setting='psd_dB', names=X_train+X_val)
+# df_val = make_df_parallel(setting='psd_dB', names=X_val)
+df_test = make_df_parallel(setting='psd_dB', names=X_test)
+print(f"{time.time() - t} seconds")
+
+y_train = y_train + y_val
+
+if model.startswith('knn'):
+    # SCALING DATA
+    from sklearn.preprocessing import StandardScaler
+    sc = StandardScaler()#with_std=True)
+    x_train = sc.fit_transform(df_train.values)
+    x_test = sc.fit_transform(df_test.values)
 
 
-# data1 = Dataset('increasing dataset')
-# data1.target_classes = [i for i in data1.target_classes if "aedes" not in i.split('_')]
-# data1.load(only_names=True, text_labels=True)
-# data2 = Dataset('Wingbeats')
-# data2.load(only_names=True, nr_signals=5000, text_labels=True);
-data = Dataset('LG')
-data.load(only_names=True, text_labels=True);
+    from sklearn.neighbors import KNeighborsClassifier
+    from sklearn.model_selection import GridSearchCV, cross_val_score
 
+    grid_params = {
+        'n_neighbors': [11, 13, 15, 17],
+        'weights': ['uniform', 'distance'],
+        'metric': ['euclidean', 'manhattan']
+    }
 
-# In[4]:
+    print(f'Using knn parameters:\n {grid_params}')
 
+    gs = GridSearchCV(KNeighborsClassifier(),
+                    grid_params,
+                    verbose=1,
+                    cv=5,
+                    n_jobs=-1)
 
-X_names = data.filenames
-y = data.y
-target_names = np.unique(y)
-print("Names of all classes: \n{}".format(target_names))
-print(pd.Series(y).value_counts())
+    t = time.time()
+    gs_results = gs.fit(x_train, y_train)
 
+    classifier = gs_results.best_estimator_
+elif model.startswith('xgboost'):
+    x_train = df_train.values
+    x_test = df_test.values
 
-# # Splitting into Train/Val/Test
+    from sklearn.model_selection import GridSearchCV
+    from xgboost import XGBClassifier
 
-# In[5]:
+    parameters = {'max_depth': range (3, 5, 1),
+                'n_estimators': range(340, 460, 40),
+                'learning_rate': [0.3, 0.4, 0.5],
+                'gamma': [0, 0.5]}
 
+    print(f'Using xgboost parameters:\n {parameters}')
 
-y = LabelEncoder().fit_transform(y)
+    estimator = XGBClassifier(param_grid=parameters,
+                            random_state=0,
+                            seed=42,
+                            verbose=True)
 
-X_train, X_test, y_train, y_test = train_test_split(X_names, y, 
-                                                    test_size=0.10, 
-                                                    shuffle=True, 
-                                                    random_state=0)
-X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, 
-                                                  test_size=0.2, 
-                                                  random_state=0)
-print("Train shape: \t{}, \nTest shape: \t{}, \nValid shape: \t{}".format(len(X_train), len(X_test), len(X_val)))
+    gs_xgb = GridSearchCV(
+        estimator=estimator,
+        param_grid=parameters,
+        n_jobs = -1,
+        cv = 5,
+        verbose=True)
 
+    t = time.time()
+    gs_xgb.fit(x_train, y_train)
 
-# In[6]:
+    classifier = gs_xgb.best_estimator_
+else:
+    raise NotImplementedError('Not implemented yet.')
 
+print(classifier)
+print(f"Ran grid search in {time.time() - t} seconds")
 
-callbacks_list = [ModelCheckpoint(top_weights_path, monitor = 'val_acc', verbose = 1, save_best_only = True, save_weights_only = True),
-    EarlyStopping(monitor = 'val_acc', patience = 6, verbose = 1),
-    ReduceLROnPlateau(monitor = 'val_acc', factor = 0.1, patience = 3, verbose = 1),
-    CSVLogger(logfile)]
+t = time.time()
+print("Fitting model in training data")
+classifier.fit(x_train, y_train)
+y_pred = classifier.predict_proba(df_test.values)
+print(f"Fit model in {time.time() - t} seconds")
 
-img_input = Input(shape = input_shape)
+y_pred = np.argmax(y_pred, axis=1)
 
-model = current_model(input_tensor = img_input, classes = len(target_names), weights = None)
+from sklearn.metrics import confusion_matrix,balanced_accuracy_score
 
-model.compile(optimizer = 'adam', loss = 'categorical_crossentropy', metrics = ['accuracy'])
+# Calculating confusion matrix
+cm = confusion_matrix(y_test, y_pred)
+print(cm)
 
-callbacks_list = [ModelCheckpoint(monitor = monitor,
-                                filepath = top_weights_path,
-                                save_best_only = True,
-                                save_weights_only = True,
-                                verbose = 1),
-                    EarlyStopping(monitor = monitor,
-                                patience = es_patience,
-                                verbose = 1),
-                    ReduceLROnPlateau(monitor = monitor,
-                                factor = 0.1,
-                                patience = rlr_patience,
-                                verbose = 1),
-                    CSVLogger(filename = logfile)]
+ac = balanced_accuracy_score(y_test, y_pred)
+print(f'Balanced Accuracy Score: {ac}')
 
-
-# In[7]:
-
-
-model.fit_generator(train_generator(X_train,
-                                    y_train, 
-                                    batch_size=batch_size, 
-                                    target_names=target_names,
-                                    setting=setting),
-                    steps_per_epoch = int(math.ceil(float(len(X_train)) / float(batch_size))),
-                    epochs=100, 
-                    validation_data = valid_generator(X_val,
-                                                      y_val, 
-                                                      batch_size=batch_size, 
-                                                      target_names=target_names,
-                                                      setting=setting), 
-                    validation_steps = int(math.ceil(float(len(X_test)) / float(batch_size))),
-                    callbacks = callbacks_list)
-
-
-# In[ ]:
-
-
-model.load_weights(top_weights_path)
-
-loss, acc = model.evaluate_generator(valid_generator(X_val, y_val, batch_size=32),
-        steps = int(math.ceil(float(len(X_test)) / float(batch_size))))
-#print('loss', loss)
-print('Test accuracy:', acc)
-
-
-# In[ ]:
-
-
-from keras.models import model_from_yaml
-# serialize model to YAML
-model_yaml = model.to_yaml()
-with open(TEMP_DATADIR + model_name + ".yaml", "w") as yaml_file:
-    yaml_file.write(model_yaml)
-model.save_weights(TEMP_DATADIR + model_name + "_weights.h5")
-
-
-# In[ ]:
-
-
-
-
-
-
-
-
-
-
-
+t = time.time()
+print("Saving model")
+from joblib import dump, load
+dump(classifier, f'{model}_{ac:.2f}.joblib') 
+print(f"Saved model in {time.time() - t} seconds")
