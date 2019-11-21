@@ -69,9 +69,9 @@ y_train = y_train + y_val
 if model.startswith('knn'):
     # SCALING DATA
     from sklearn.preprocessing import StandardScaler
-    sc = StandardScaler()#with_std=True)
-    x_train = sc.fit_transform(df_train.values)
-    x_test = sc.fit_transform(df_test.values)
+    #sc = StandardScaler()#with_std=True)
+    x_train = df_train.values #sc.fit_transform(df_train.values)
+    x_test = df_test.values #sc.fit_transform(df_test.values)
 
 
     from sklearn.neighbors import KNeighborsClassifier

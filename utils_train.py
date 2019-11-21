@@ -47,7 +47,7 @@ class TrainConfiguration(object):
         self.callbacks_list = [ModelCheckpoint(monitor = self.monitor,
                                     filepath = self.top_weights_path,
                                     save_best_only = True,
-                                    save_weights_only = True,
+                                    save_weights_only = False,
                                     verbose = 1),
                                 EarlyStopping(monitor = self.monitor,
                                             patience = self.es_patience,
