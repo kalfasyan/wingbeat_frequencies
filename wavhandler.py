@@ -66,7 +66,7 @@ class Dataset(object):
                 self.filenames = all_data
         assert len(self.filenames), "No data found."
         self.filenames = pd.Series(self.filenames)
-        print("Data: {}.\nRead {} filenames in {:.2f} seconds.".format(data, len(self.filenames) ,time.time() - tic))
+        print("Species: {}.\nRead {} filenames in {:.2f} seconds.".format(data, len(self.filenames) ,time.time() - tic))
 
         ## Reading data into a matrix
         if loadmat:
