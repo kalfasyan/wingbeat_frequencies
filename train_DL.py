@@ -14,7 +14,6 @@ from tensorflow.keras.optimizers import SGD
 from tensorflow.keras.layers import BatchNormalization,Input, LSTM, GRU
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping, ReduceLROnPlateau, CSVLogger
 from tensorflow.keras.utils import to_categorical
-from tensorflow.keras.applications.densenet import DenseNet121
 
 np.random.seed(42)
 
@@ -118,8 +117,28 @@ vcounts.index = mapping.keys()
 print(vcounts)
 
 # MODELLING
+from tensorflow.keras.applications.densenet import DenseNet121, DenseNet169, DenseNet201
+from tensorflow.keras.applications.inception_resnet_v2 import InceptionResNetV2
+from tensorflow.keras.applications.inception_v3 import InceptionV3
+from tensorflow.keras.applications.mobilenet import MobileNet
+from tensorflow.keras.applications.nasnet import NASNetLarge, NASNetMobile
+from tensorflow.keras.applications.vgg16 import VGG16
+from tensorflow.keras.applications.vgg19 import VGG19
+from tensorflow.keras.applications.xception import Xception
 
-traincf = TrainConfiguration(X=X_train, y=y_train, setting=data_setting, model_name=f'{splitting}_{data_setting}_{model_setting}')
+# current_model = DenseNet121
+#current_model = DenseNet169
+current_model = DenseNet201
+#current_model = InceptionResNetV2
+#current_model = InceptionV3
+#current_model = MobileNet
+#current_model = NASNetLarge
+#current_model = NASNetMobile
+#current_model = VGG16
+#current_model = VGG19
+#current_model = Xception
+
+traincf = TrainConfiguration(X=X_train, y=y_train, setting=data_setting, model_name=f'{splitting}_{data_setting}_{model_setting}_densenet201')
 targets = 6
 
 print(f'### MODEL NAME ==== {traincf.model_name} ####')
