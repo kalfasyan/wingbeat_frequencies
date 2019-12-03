@@ -15,7 +15,7 @@ import logging
 import math
 from utils import crop_rec, TEMP_DATADIR
 from tensorflow.keras import utils
-from wavhandler import Dataset
+from wavhandler import Dataset, BASE_DIR
 
 
 class TrainConfiguration(object):
@@ -539,6 +539,9 @@ def test_days(dataset, pct=0.1):
     return early_days, late_days
 
 def mosquito_data_split(splitting=None, data=None):
+    from sklearn.preprocessing import LabelEncoder
+    from sklearn.model_selection import train_test_split
+
     assert splitting in ['random','randomcv','custom'], 'Wrong splitting argument passed.'
     # assert isinstance(data, Dataset), 'Pass a wavhandler.Dataset as data.'
 
@@ -611,6 +614,13 @@ def train_model(model_setting=None, splitting=None, data_setting=None, cnn2d=Non
                 X_train=None, y_train=None,
                 X_val=None, y_val=None,
                 X_test=None, y_test=None, flag=None):
+    from tensorflow.keras.models import Sequential
+    from tensorflow.keras.layers import Dense, Dropout, Activation
+    from tensorflow.keras.layers import Conv1D, GlobalAveragePooling1D, MaxPooling1D
+    from tensorflow.keras.optimizers import SGD
+    from tensorflow.keras.layers import BatchNormalization,Input, LSTM, GRU
+    from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping, ReduceLROnPlateau, CSVLogger
+    from tensorflow.keras.utils import to_categorical
     # MODELLING
     from tensorflow.keras.applications.densenet import DenseNet121, DenseNet169, DenseNet201
     from tensorflow.keras.applications.inception_resnet_v2 import InceptionResNetV2
