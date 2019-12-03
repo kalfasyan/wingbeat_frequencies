@@ -39,7 +39,7 @@ model_setting = 'gru' #sys.argv[3]
 
 assert splitting in ['random','improved'], "Wrong splitting method given."
 assert data_setting in ['raw','stft', "Wrong data settting given."]
-assert model_setting in ['lstm','gru','LSTM','GRU','CONV1D','CONV2D','conv1d','conv2d']
+assert model_setting in ['wavenet','lstm','gru','LSTM','GRU','CONV1D','CONV2D','conv1d','conv2d']
 
 data = Dataset('Wingbeats')
 print(data.target_classes)
@@ -183,6 +183,36 @@ elif model_setting == 'CONV2D':
     model = current_model(input_tensor = Input(shape = (129, 120, 1)), 
                         classes = len(traincf.target_names), 
                         weights = None)
+elif model_setting == 'wavenet':
+    model=Sequential()
+    model.add(Conv1D(16, 3, activation='relu', input_shape=(5000, 1)))
+    for rate in (1,2,4,8)*2:
+        model.add(Conv1D(filters=16*rate,
+                                    kernel_size=3,
+                                    padding="causal",
+                                    activation="relu",
+                                    dilation_rate=rate))
+        model.add(Conv1D(filters=16*rate,
+                                    kernel_size=3,
+                                    padding="causal",
+                                    activation="relu",
+                                    dilation_rate=rate))
+        model.add(BatchNormalization())
+
+    model.add(MaxPooling1D(2))
+    model.add(Conv1D(128, 2, activation='relu'))
+    model.add(Conv1D(128, 2, activation='relu'))
+    model.add(BatchNormalization())
+
+    model.add(MaxPooling1D(2))
+    model.add(Conv1D(256, 2, activation='relu'))
+    model.add(Conv1D(256, 2, activation='relu'))
+    model.add(BatchNormalization())
+    model.add(GlobalAveragePooling1D())
+
+    model.add(Dropout(0.5))
+    model.add(Dense(targets, activation='softmax'))
+
 elif model_setting == 'CONV1D':
     # Build the Neural Network
     model = Sequential()
