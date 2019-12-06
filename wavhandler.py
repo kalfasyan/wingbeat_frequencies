@@ -142,7 +142,7 @@ class Dataset(object):
         elif setting == 'psd_dB':
             self.psd_dB = make_df_parallel(names=self.filenames.tolist(), setting=setting)
             return self.psd_dB
-        elif setting == 'spectrograms':
+        elif setting == 'stft':
             self.specs = make_df_parallel(names=self.filenames.tolist(), setting=setting)
             return self.specs
         else:
@@ -307,7 +307,7 @@ def transform_data(X, setting = None):
     from tqdm import tqdm
     import librosa
     # transform the data
-    if setting=='spectrograms':
+    if setting=='stft':
         XX = []#np.zeros((X.shape[0],129*120))
         for i in tqdm(range(X.shape[0]), disable=DISABLE_TQDM):
             data = librosa.stft(X[i], n_fft = N_FFT, hop_length = HOP_LEN)
@@ -407,7 +407,7 @@ def make_df_parallel(setting=None, names=None):
         result_list.append(pool.map(transform_data_parallel_psd, names))
     elif setting == 'raw':
         result_list.append(pool.map(read_simple_parallel, names))
-    elif setting == 'spectrograms':
+    elif setting == 'stft':
         result_list.append(pool.map(transform_data_parallel_spectograms, names))
     elif setting == 'psd_dB':
         result_list.append(pool.map(transform_data_parallel, names))
