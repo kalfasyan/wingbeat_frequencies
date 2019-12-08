@@ -6,8 +6,8 @@ from sklearn.preprocessing import LabelEncoder
 from sklearn.utils import shuffle
 from sklearn.model_selection import train_test_split
 from utils_train import train_test_val_split, TrainConfiguration, train_generator, valid_generator,mosquito_data_split, train_model
-
-np.random.seed(42)
+seed = 42
+np.random.seed(seed=seed)
 
 
 
@@ -26,14 +26,31 @@ print(data.target_classes)
 print(f'SPLITTING DATA {splitting}')
 X_train, X_val, X_test, y_train, y_val, y_test = mosquito_data_split(splitting=splitting, data=data)
 
-model = train_model(model_setting=model_setting,
-                    splitting=splitting, 
-                    data_setting=data_setting,
-                    X_train=X_train, 
-                    y_train=y_train, 
-                    X_val=X_val, 
-                    y_val=y_val, 
-                    X_test=X_test, 
-                    y_test=y_test,
-                    cnn_if_2d=cnn_if_2d,
-                    flag='data_centering')
+if splitting in ['random', 'randomcv']:
+    model = train_model(model_setting=model_setting,
+                        splitting=splitting, 
+                        data_setting=data_setting,
+                        X_train=X_train, 
+                        y_train=y_train, 
+                        X_val=X_val, 
+                        y_val=y_val, 
+                        X_test=X_test, 
+                        y_test=y_test,
+                        cnn_if_2d=cnn_if_2d,
+                        flag='data_centering')
+elif splitting == 'custom':
+    for i in range(5):
+        X_train, y_train = shuffle(X_train[i], y_train[i], random_state=seed)
+        X_val, y_val = shuffle(X_val[i], y_val[i], random_state=seed)
+        break
+        model = train_model(model_setting=model_setting,
+                            splitting=splitting, 
+                            data_setting=data_setting,
+                            X_train=X_train, 
+                            y_train=y_train, 
+                            X_val=X_val, 
+                            y_val=y_val, 
+                            X_test=X_test, 
+                            y_test=y_test,
+                            cnn_if_2d=cnn_if_2d,
+                            flag=f'split_{i}')

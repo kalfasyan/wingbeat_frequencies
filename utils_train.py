@@ -427,6 +427,7 @@ def mosquito_data_split(splitting=None, data=None):
                 X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size=0.2, random_state=seed)
             elif splitting == 'custom': # TODO
                 import itertools
+                from sklearn.model_selection import LeaveOneGroupOut
 
                 # Creating DataFrame to sort data by date
                 df = pd.DataFrame(X_train)
@@ -447,7 +448,7 @@ def mosquito_data_split(splitting=None, data=None):
                     class_chunks[cl] = [sub.iloc[inds_chunk[j]]['filenames'].tolist() for j in range(len(inds_chunk))] 
 
                 # Now creating the actual folds for Cross validation 
-                X_folds = {} 
+                X_folds = {}
                 y_folds = {}
                 # For each fold, we add the corresponding chunks of each mosquito
                 # This means that in FOLD-0 we will have the first chunk of each mosquito
@@ -463,13 +464,19 @@ def mosquito_data_split(splitting=None, data=None):
                 groups = np.array(range(len(X_folds)))
 
                 logo = LeaveOneGroupOut()
-                X_train, X_val, y_train, y_val = [], []
+                X_train, X_val, y_train, y_val = [], [], [], []
                 for train_index, val_index in logo.split(X_folds, y_folds, groups):
-                    print(train_index, val_index)
-
                     train_groups = [X_folds.get(key) for key in train_index]
-                    X_train.append(list(itertools.chain.from_iterable(zz)))
-                    X_val.append(X_folds[val_index[0]])
+                    train_groups_untd = pd.Series(list(itertools.chain.from_iterable(train_groups)))
+
+                    X_train.append(train_groups_untd.tolist())
+                    train_labels = train_groups_untd.apply(lambda x: x.split('/')[6]).tolist()
+                    y_train.append(list(le.fit_transform(train_labels)))
+                    
+                    val_group = pd.Series(X_folds[val_index[0]])
+                    X_val.append(val_group.tolist())
+                    val_labels = val_group.apply(lambda x: x.split('/')[6]).tolist()
+                    y_val.append(list(le.fit_transform(val_labels)))
     else:
         raise NotImplementedError('NOT IMPLEMENTED YED')
     return X_train, X_val, X_test, y_train, y_val, y_test
@@ -500,6 +507,7 @@ def train_model(model_setting=None, splitting=None, data_setting=None, cnn_if_2d
     from sklearn.metrics import confusion_matrix
     from sklearn.metrics import balanced_accuracy_score
 
+    print(f'processing: {cnn_if_2d}_{flag}')
     traincf = TrainConfiguration(X=X_train, y=y_train, setting=data_setting, model_name=f'{splitting}_{data_setting}_{model_setting}_{cnn_if_2d}_{flag}')
     model = ModelConfiguration(model_setting=model_setting, cnn_if_2d=cnn_if_2d, target_names=traincf.target_names).config
 
