@@ -57,7 +57,6 @@ class ModelConfiguration(object):
                                 weights = None)
         elif model_setting in ['gru','GRU','LSTM','lstm']:
             self.input_shape = (5000, 1)
-            
             model = Sequential()
             model.add(Conv1D(16, 3, activation='relu', input_shape=self.input_shape))
             model.add(Conv1D(16, 3, activation='relu'))
@@ -87,8 +86,9 @@ class ModelConfiguration(object):
             model.add(Dropout(0.5))
             model.add(Dense(len(target_names), activation='softmax'))
         elif model_setting == 'wavenet':
+            self.input_shape = (5000, 1)
             model=Sequential()
-            model.add(Conv1D(16, 3, activation='relu', input_shape=(5000, 1)))
+            model.add(Conv1D(16, 3, activation='relu', input_shape=self.input_shape))
             for rate in (1,2,4,8)*2:
                 model.add(Conv1D(filters=16*rate,
                                             kernel_size=3,
@@ -112,10 +112,10 @@ class ModelConfiguration(object):
             model.add(GlobalAveragePooling1D())
             model.add(Dropout(0.5))
             model.add(Dense(len(target_names), activation='softmax'))
-
         elif model_setting in ['conv1d','CONV1D']:
+            self.input_shape = (5000, 1)
             model = Sequential()
-            model.add(Conv1D(16, 3, activation='relu', input_shape=(5000, 1)))
+            model.add(Conv1D(16, 3, activation='relu', input_shape=self.input_shape))
             model.add(Conv1D(16, 3, activation='relu'))
             model.add(BatchNormalization())
             model.add(Conv1D(32, 3, activation='relu'))
@@ -143,7 +143,7 @@ class ModelConfiguration(object):
 
 class TrainConfiguration(object):
     """ Configuration for training procedures. Contains all settings """
-    def __init__(self, X=[], y=[], setting='raw', model_name='test', batch_size=32, monitor='val_accuracy', 
+    def __init__(self, dataset=None, setting='raw', model_name='test', batch_size=32, monitor='val_accuracy', 
                 es_patience=7, rlr_patience=3, epochs=100):
         from tensorflow.keras.models import Sequential
         from tensorflow.keras.layers import Dense, Dropout, Activation
@@ -157,8 +157,6 @@ class TrainConfiguration(object):
 
         super(TrainConfiguration, self).__init__()
 
-        self.X = X
-        self.y = y
         self.setting = setting
         self.model_name = model_name
         self.top_weights_path = TEMP_DATADIR + str(self.model_name) + '.h5'
@@ -168,7 +166,8 @@ class TrainConfiguration(object):
         self.es_patience = es_patience
         self.rlr_patience = rlr_patience
         self.epochs = epochs
-        self.target_names = np.unique(y)
+        self.target_names = np.unique(dataset.target_classes)
+        self.targets = len(self.target_names)
         self.callbacks_list = [ModelCheckpoint(monitor = self.monitor,
                                     filepath = self.top_weights_path,
                                     save_best_only = True,
@@ -232,8 +231,9 @@ def train_generator(X_train, y_train, batch_size, target_names, setting='stft', 
 #                 data = random_data_shift(data, u = .2)
 
                 data = metamorphose(data, setting=setting, stg_obj=obj)
+                # Center data
                 data = data - train_mean
-
+                # Expand dimensions
                 data = np.expand_dims(data, axis = -1)
 
                 x_batch.append(data)
@@ -241,7 +241,6 @@ def train_generator(X_train, y_train, batch_size, target_names, setting='stft', 
 
             x_batch = np.array(x_batch, np.float32)
             y_batch = np.array(y_batch, np.float32)
-            
             y_batch = utils.to_categorical(y_batch, len(target_names))
             
             yield x_batch, y_batch
@@ -265,8 +264,9 @@ def valid_generator(X_val, y_val, batch_size, target_names, setting='stft', prep
                     data = crop_rec(data)
 
                 data = metamorphose(data, setting=setting, stg_obj=obj)
+                # Center data
                 data = data - preprocessing_train_stats.mean.squeeze() 
-
+                # Expand dimensions
                 data = np.expand_dims(data, axis = -1)
 
                 x_batch.append(data)
@@ -295,15 +295,15 @@ def metamorphose(data, setting='stft', stg_obj=None, img_sz=150):
         data = np.flipud(data)
     elif setting == 'raw':
         return data
-    elif setting=='gasf':
-        data = stg_obj.fit_transform(data.reshape(1,-1)).squeeze()
-    elif setting=='gadf':
-        data = stg_obj.fit_transform(data.reshape(1,-1)).squeeze()
-    elif setting=='mtf':
-        data = stg_obj.fit_transform(data.reshape(1,-1)).squeeze()
-    elif setting=='rp':
-        data = stg_obj.fit_transform(data.reshape(1,-1)).squeeze()
-        data = cv2.resize(data,(img_sz,img_sz))
+    # elif setting=='gasf':
+    #     data = stg_obj.fit_transform(data.reshape(1,-1)).squeeze()
+    # elif setting=='gadf':
+    #     data = stg_obj.fit_transform(data.reshape(1,-1)).squeeze()
+    # elif setting=='mtf':
+    #     data = stg_obj.fit_transform(data.reshape(1,-1)).squeeze()
+    # elif setting=='rp':
+    #     data = stg_obj.fit_transform(data.reshape(1,-1)).squeeze()
+    #     data = cv2.resize(data,(img_sz,img_sz))
     else:
         raise ValueError("Wrong setting given.")
     return data
@@ -316,16 +316,16 @@ def create_settings_obj(setting='gasf', img_sz=150):
         obj = None
     elif setting == 'raw':
         obj = None
-    elif setting == 'gasf':
-        obj = GramianAngularField(image_size=img_sz, method='summation')
-    elif setting == 'gadf':
-        obj = GramianAngularField(image_size=img_sz, method='difference')
-    elif setting == 'mtf':
-        obj = MarkovTransitionField(image_size=img_sz)
-    elif setting == 'rp':
-        obj = RecurrencePlot(dimension=7, time_delay=3,
-                    threshold='percentage_points',
-                    percentage=30)
+    # elif setting == 'gasf':
+    #     obj = GramianAngularField(image_size=img_sz, method='summation')
+    # elif setting == 'gadf':
+    #     obj = GramianAngularField(image_size=img_sz, method='difference')
+    # elif setting == 'mtf':
+    #     obj = MarkovTransitionField(image_size=img_sz)
+    # elif setting == 'rp':
+    #     obj = RecurrencePlot(dimension=7, time_delay=3,
+    #                 threshold='percentage_points',
+    #                 percentage=30)
     else:
         raise ValueError("Wrong setting given.")
     return obj
@@ -425,7 +425,7 @@ def mosquito_data_split(splitting=None, data=None):
             if splitting == 'randomcv':
                 X_train,y_train = shuffle(X_train.tolist(),y_train.tolist(), random_state=seed)
                 X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size=0.2, random_state=seed)
-            elif splitting == 'custom': # TODO
+            elif splitting == 'custom':
                 import itertools
                 from sklearn.model_selection import LeaveOneGroupOut
 
@@ -500,7 +500,7 @@ def calculate_train_statistics(X_train=None, setting=None):
 
     return train_stats
 
-def train_model(model_setting=None, splitting=None, data_setting=None, cnn_if_2d=None,
+def train_model(dataset=None, model_setting=None, splitting=None, data_setting=None, cnn_if_2d=None,
                 X_train=None, y_train=None,
                 X_val=None, y_val=None,
                 X_test=None, y_test=None, flag=None):
@@ -508,7 +508,7 @@ def train_model(model_setting=None, splitting=None, data_setting=None, cnn_if_2d
     from sklearn.metrics import balanced_accuracy_score
 
     print(f'processing: {cnn_if_2d}_{flag}')
-    traincf = TrainConfiguration(X=X_train, y=y_train, setting=data_setting, model_name=f'{splitting}_{data_setting}_{model_setting}_{cnn_if_2d}_{flag}')
+    traincf = TrainConfiguration(dataset=dataset, setting=data_setting, model_name=f'{splitting}_{data_setting}_{model_setting}_{cnn_if_2d}_{flag}')
     model = ModelConfiguration(model_setting=model_setting, cnn_if_2d=cnn_if_2d, target_names=traincf.target_names).config
 
     model.compile(loss='categorical_crossentropy',
