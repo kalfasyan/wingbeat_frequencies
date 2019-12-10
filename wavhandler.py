@@ -28,6 +28,7 @@ class Dataset(object):
         self.setting = 'raw'
         self.cleaned = False
         self.sensor_features = False
+        self.class_path_idx = self.directory.split('/').index(self.name) + 1
 
     def read(self, data='all',fext='wav', labels='text', loadmat=True, setting='raw'):
         """

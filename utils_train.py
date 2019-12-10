@@ -356,7 +356,7 @@ def train_test_filenames(dataset, species, train_dates=[], test_dates=[], plot=F
     print("{} train filenames, {} test filenames".format(train_fnames.shape[0], test_fnames.shape[0]))
     return train_fnames, test_fnames
 
-def mosquito_data_split(splitting=None, data=None):
+def mosquito_data_split(splitting=None, dataset=None):
     from sklearn.preprocessing import LabelEncoder
     from sklearn.model_selection import train_test_split
 
@@ -364,21 +364,21 @@ def mosquito_data_split(splitting=None, data=None):
     # assert isinstance(data, Dataset), 'Pass a wavhandler.Dataset as data.'
 
     if splitting == 'random':
-            data.read('Ae. aegypti', loadmat=False)
-            x1 = data.filenames.sample(14800, random_state=seed)
-            data.read('Ae. albopictus', loadmat=False)
-            x2 = data.filenames.sample(14800, random_state=seed)
-            data.read('An. arabiensis', loadmat=False)
-            x3 = data.filenames.sample(14800, random_state=seed)
-            data.read('An. gambiae', loadmat=False)
-            x4 = data.filenames.sample(14800, random_state=seed)
-            data.read('C. pipiens', loadmat=False)
-            x5 = data.filenames.sample(14800, random_state=seed)
-            data.read('C. quinquefasciatus', loadmat=False)
-            x6 = data.filenames.sample(14800, random_state=seed)
+            dataset.read('Ae. aegypti', loadmat=False)
+            x1 = dataset.filenames.sample(14800, random_state=seed)
+            dataset.read('Ae. albopictus', loadmat=False)
+            x2 = dataset.filenames.sample(14800, random_state=seed)
+            dataset.read('An. arabiensis', loadmat=False)
+            x3 = dataset.filenames.sample(14800, random_state=seed)
+            dataset.read('An. gambiae', loadmat=False)
+            x4 = dataset.filenames.sample(14800, random_state=seed)
+            dataset.read('C. pipiens', loadmat=False)
+            x5 = dataset.filenames.sample(14800, random_state=seed)
+            dataset.read('C. quinquefasciatus', loadmat=False)
+            x6 = dataset.filenames.sample(14800, random_state=seed)
 
             X = pd.concat([x1, x2, x3, x4, x5, x6], axis=0)
-            y = X.apply(lambda x: x.split('/')[len(BASE_DIR.split('/'))])
+            y = X.apply(lambda x: x.split('/')[dataset.class_path_idx])
 
             le = LabelEncoder()
             y = le.fit_transform(y.copy())
@@ -387,20 +387,20 @@ def mosquito_data_split(splitting=None, data=None):
             X_train, X_test, X_val, y_train, y_test, y_val = train_test_val_split(X,y,test_size=0.13514, val_size=0.2)
     elif splitting in ['randomcv', 'custom']:
             # ### Ae. Aegypti
-            x1_tr, x1_ts = train_test_filenames(data,'Ae. aegypti', test_dates=['20161213','20161212'])
+            x1_tr, x1_ts = train_test_filenames(dataset,'Ae. aegypti', test_dates=['20161213','20161212'])
             # ### Ae. albopictus
-            x2_tr, x2_ts = train_test_filenames(data,'Ae. albopictus', test_dates=['20170103', '20170102'])
+            x2_tr, x2_ts = train_test_filenames(dataset,'Ae. albopictus', test_dates=['20170103', '20170102'])
             # ### An. arabiensis
-            x3_tr, x3_ts = train_test_filenames(data,'An. arabiensis', test_dates=['20170319','20170320',
+            x3_tr, x3_ts = train_test_filenames(dataset,'An. arabiensis', test_dates=['20170319','20170320',
                                                                                     '20170318','20170317'], 
                                                                         train_dates=['20170201','20170202', '20170203','20170204',
                                                                                     '20170205','20170206','20170131','20170130'])
             # ### An. gambiae
-            x4_tr, x4_ts = train_test_filenames(data,'An. gambiae', test_dates=['20170110', '20170109']) 
+            x4_tr, x4_ts = train_test_filenames(dataset,'An. gambiae', test_dates=['20170110', '20170109']) 
             # ### Culex quinquefasciatus
-            x5_tr, x5_ts = train_test_filenames(data,'C. quinquefasciatus', test_dates=['20161219']) 
+            x5_tr, x5_ts = train_test_filenames(dataset,'C. quinquefasciatus', test_dates=['20161219']) 
             # ### Culex pipiens
-            x6_tr, x6_ts = train_test_filenames(data,'C. pipiens', test_dates=['20161206', '20161205']) 
+            x6_tr, x6_ts = train_test_filenames(dataset,'C. pipiens', test_dates=['20161206', '20161205']) 
 
             x1_tr, x1_ts = x1_tr.sample(12800, random_state=seed), x1_ts.sample(2000, random_state=seed)
             x2_tr, x2_ts = x2_tr.sample(12800, random_state=seed), x2_ts.sample(2000, random_state=seed)
@@ -413,8 +413,8 @@ def mosquito_data_split(splitting=None, data=None):
             X_train = pd.concat([x1_tr, x2_tr, x3_tr, x4_tr, x5_tr, x6_tr], axis=0)
             X_test = pd.concat([x1_ts, x2_ts, x3_ts, x4_ts, x5_ts, x6_ts], axis=0)
 
-            y_train = X_train.apply(lambda x: x.split('/')[len(BASE_DIR.split('/'))])
-            y_test = X_test.apply(lambda x: x.split('/')[len(BASE_DIR.split('/'))])
+            y_train = X_train.apply(lambda x: x.split('/')[dataset.class_path_idx])
+            y_test = X_test.apply(lambda x: x.split('/')[dataset.class_path_idx])
 
             le = LabelEncoder()
             y_train = le.fit_transform(y_train)
@@ -430,10 +430,10 @@ def mosquito_data_split(splitting=None, data=None):
                 from sklearn.model_selection import LeaveOneGroupOut
 
                 # Creating DataFrame to sort data by date
-                df = pd.DataFrame(X_train)
-                df['class'] = df['filenames'].apply(lambda x: x.split('/')[6])
+                df = pd.DataFrame(X_train, columns=['filenames'])
+                df['class'] = df['filenames'].apply(lambda x: x.split('/')[dataset.class_path_idx])
                 df['wavnames'] = df['filenames'].apply(lambda x: x.split('/')[-1][:-4])
-                df['date'] = df['wavnames'].apply(lambda x: pd.to_datetime(''.join(x.split('_')[0:2]),                                                             format='F%y%m%d%H%M%S'))
+                df['date'] = df['wavnames'].apply(lambda x: pd.to_datetime(''.join(x.split('_')[0:2]),format='F%y%m%d%H%M%S'))
                 df.sort_values(by='date', inplace=True)
 
                 # For each mosquito we divide its data in 5 chunks
@@ -441,7 +441,7 @@ def mosquito_data_split(splitting=None, data=None):
                 n_chunks = 5 # also number of folds
                 class_chunks = {} # this is a dict with class as index and 5 lists in each class, 1 for each chunk
                 for cl, sub in df.groupby('class'):
-                    sub.reset_index(drop=True, inplace=True) # resetting index to have values from 1....sub.shape[0]    
+                    sub.reset_index(drop=True, inplace=True) # resetting index to have values from 1....sub.shape[0]
                     lst = list(range(0,sub.shape[0])) # this is basically the index
                     n = int(sub.shape[0] / n_chunks) # number of items in each chunk
                     inds_chunk = [np.array(lst[i:i + n]) for i in range(0, len(lst), n)] # splitting the index numbers (lst) in 5 chunks
@@ -457,7 +457,7 @@ def mosquito_data_split(splitting=None, data=None):
                     X_folds[i] = [] # creating a list in which to add data of each mosquito
                     for c in classes: 
                         X_folds[i].extend(class_chunks[c][i]) # adding each mosquito chunk data in the list
-                    y_folds[i] = pd.Series(X_folds[i]).apply(lambda x: x.split('/')[6]).tolist() # targets
+                    y_folds[i] = pd.Series(X_folds[i]).apply(lambda x: x.split('/')[dataset.class_path_idx]).tolist() # targets
 
                 # Creating groups to use the LeaveOneGroupOut of sklearn for combining
                 # our X_folds so that 4 of them become train and 1 becomes val each time.
@@ -470,12 +470,12 @@ def mosquito_data_split(splitting=None, data=None):
                     train_groups_untd = pd.Series(list(itertools.chain.from_iterable(train_groups)))
 
                     X_train.append(train_groups_untd.tolist())
-                    train_labels = train_groups_untd.apply(lambda x: x.split('/')[6]).tolist()
+                    train_labels = train_groups_untd.apply(lambda x: x.split('/')[dataset.class_path_idx]).tolist()
                     y_train.append(list(le.fit_transform(train_labels)))
                     
                     val_group = pd.Series(X_folds[val_index[0]])
                     X_val.append(val_group.tolist())
-                    val_labels = val_group.apply(lambda x: x.split('/')[6]).tolist()
+                    val_labels = val_group.apply(lambda x: x.split('/')[dataset.class_path_idx]).tolist()
                     y_val.append(list(le.fit_transform(val_labels)))
     else:
         raise NotImplementedError('NOT IMPLEMENTED YED')

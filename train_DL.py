@@ -24,7 +24,7 @@ data = Dataset('Wingbeats')
 print(data.target_classes)
 
 print(f'SPLITTING DATA {splitting}')
-X_train, X_val, X_test, y_train, y_val, y_test = mosquito_data_split(splitting=splitting, data=data)
+X_train, X_val, X_test, y_train, y_val, y_test = mosquito_data_split(splitting=splitting, dataset=data)
 
 if splitting in ['random', 'randomcv']:
     train_model(dataset=data,
