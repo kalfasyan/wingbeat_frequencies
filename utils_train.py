@@ -12,6 +12,7 @@ import logging
 import math
 from utils import crop_rec, TEMP_DATADIR
 from wavhandler import Dataset, BASE_DIR
+import time
 
 class ModelConfiguration(object):
     def __init__(self, model_setting=None, cnn_if_2d=None, target_names=None):
@@ -500,7 +501,147 @@ def calculate_train_statistics(X_train=None, setting=None):
 
     return train_stats
 
-def train_model(dataset=None, model_setting=None, splitting=None, data_setting=None, cnn_if_2d=None,
+def assign_groups(Xy_split=None, index=None):
+    df = pd.DataFrame(Xy_split, columns=['filenames'])
+    df['group'] = index
+    return df
+
+def train_model_ml(dataset=None, model_setting=None, splitting=None, data_setting=None,
+                    X_train=None, y_train=None,
+                    X_val=None, y_val=None,
+                    X_test=None, y_test=None, flag=None):
+    from sklearn.metrics import confusion_matrix
+    from sklearn.metrics import balanced_accuracy_score
+    from sklearn.neighbors import KNeighborsClassifier
+    from sklearn.model_selection import GridSearchCV, cross_val_score
+    from sklearn.model_selection import GridSearchCV
+    from sklearn.ensemble import RandomForestClassifier
+    from sklearn.model_selection import GridSearchCV
+    from xgboost import XGBClassifier
+    from wavhandler import make_df_parallel
+
+    if model_setting.startswith('knn'):
+        parameters = {
+            'n_neighbors': [11, 13, 15, 17],
+            'weights': ['uniform', 'distance'],
+            'metric': ['euclidean', 'manhattan']
+        }
+
+        print(f'Using knn parameters:\n {parameters}')
+        estimator = KNeighborsClassifier()
+
+    elif model_setting.startswith('randomforest'):
+        parameters = {
+            'bootstrap': [True],
+            'max_depth': [None, 5, 10, 50, 100, 150],
+            #'max_features': [2, 3],
+            'min_samples_leaf': [3, 4, 5],
+            'min_samples_split': [8, 10, 12],
+            'max_features': ['auto', 'sqrt', 'log2'],
+            'criterion' :['gini', 'entropy'],
+            'n_estimators': [300, 400, 500]
+        }
+        print(f'Using {model_setting} parameters:\n {parameters}')
+        estimator = RandomForestClassifier(random_state=seed, 
+                                            verbose=True)
+
+    elif model_setting.startswith('xgboost'):
+        parameters = {'max_depth': range (3, 5, 1),
+                    'n_estimators': range(340, 460, 40),
+                    'learning_rate': [0.3, 0.4, 0.5],
+                    'gamma': [0, 0.5]}
+
+        print(f'Using xgboost parameters:\n {parameters}')
+        estimator = XGBClassifier(param_grid=parameters,
+                                random_state=0,
+                                seed=seed,
+                                verbose=True)
+    else:
+        raise NotImplementedError('Not implemented yet.')
+
+    gs = GridSearchCV(
+        estimator=estimator,
+        param_grid=parameters,
+        n_jobs = -1,
+        cv = 5,
+        verbose=True)
+
+    if splitting in ['random', 'randomcv']:
+        X_train.extend(X_val)
+        y_train.extend(y_val)
+        x_train = make_df_parallel(names=X_train, setting=data_setting).values
+        x_test = make_df_parallel(names=X_test, setting=data_setting).values
+        gs.fit(x_train, y_train)
+
+        t = time.time()
+        classifier = gs.best_estimator_
+        print(classifier)
+        print(f"Ran grid search in {time.time() - t} seconds")
+
+        t = time.time()
+        print("Fitting model in training data")
+        classifier.fit(x_train, y_train)
+        y_pred = classifier.predict_proba(x_test)
+        print(f"Fit model in {time.time() - t} seconds")
+
+        y_pred = np.argmax(y_pred, axis=1)
+
+        # Calculating confusion matrix
+        cm = confusion_matrix(y_test, y_pred)
+        print(cm)
+
+        ac = balanced_accuracy_score(y_test, y_pred)
+        print(f'Balanced Accuracy Score: {ac}')
+
+        t = time.time()
+        print("Saving model")
+        from joblib import dump, load
+        dump(classifier, f'temp_data/{splitting}_{data_setting}_{model_setting}_{ac:.2f}_{flag}.joblib') 
+        print(f"Saved model in {time.time() - t} seconds")
+
+    elif splitting == 'custom':
+        x_train = make_df_parallel(names=X_train, setting=data_setting).values
+        x_val = make_df_parallel(names=X_val, setting=data_setting).values
+        x_test = make_df_parallel(names=X_test, setting=data_setting).values
+
+        gs.fit(x_train, y_train)
+
+        classifier = gs.best_estimator_
+        print(classifier)
+
+        classifier.fit(x_train, y_train)
+        y_pred = classifier.predict_proba(x_val)
+        y_pred = np.argmax(y_pred, axis=1)
+    
+        cm = confusion_matrix(y_val, y_pred)
+        bacc = balanced_accuracy_score(y_val, y_pred)
+
+        from joblib import dump, load
+        dump(classifier, f'temp_data/{splitting}_{data_setting}_{model_setting}_{bacc:.2f}_{flag}.joblib') 
+        with open(f'temp_data/{splitting}_{data_setting}_{model_setting}_{flag}_results.txt', "a+") as resultsfile:
+            resultsfile.write(f'bal_acc:{bacc}, \n{cm}\n')
+
+        # FITTING ON TRAIN AND VAL AND TESTING ON TEST
+        X_train.extend(X_val)
+        y_train.extend(y_val)
+        x_train = make_df_parallel(names=X_train, setting=data_setting).values
+
+        classifier.fit(x_train, y_train)
+        y_pred = classifier.predict_proba(x_test)
+        y_pred = np.argmax(y_pred, axis=1)
+    
+        cm = confusion_matrix(y_test, y_pred)
+        bacc = balanced_accuracy_score(y_test, y_pred)
+
+        from joblib import dump, load
+        dump(classifier, f'temp_data/{splitting}_{data_setting}_{model_setting}_{bacc:.2f}_{flag}fit_on_TrainVal.joblib')
+        with open(f'temp_data/{splitting}_{data_setting}_{model_setting}_{flag}_results.txt', "a+") as resultsfile:
+            resultsfile.write(f'\nfitontrainval_\nbal_acc:{bacc}, \n{cm}\n')
+
+    return classifier
+
+
+def train_model_dl(dataset=None, model_setting=None, splitting=None, data_setting=None, cnn_if_2d=None,
                 X_train=None, y_train=None,
                 X_val=None, y_val=None,
                 X_test=None, y_test=None, flag=None):
