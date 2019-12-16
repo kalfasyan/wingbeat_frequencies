@@ -439,31 +439,3 @@ def get_wingbeat_timestamp(path):
     fname = path.split('/')[-1]
     t = fname.split('_')[0] + fname.split('_')[1]
     return pd.to_datetime(t, format='F%y%m%d%H%M%S')
-
-def merge_datasets_to_dict(dst1, dst2, namedtuple=False):
-    
-    d1 = dst1.copy()
-    d2 = dst2.copy()
-    for key,_ in d1.items():
-        if isinstance(d1[key], list):
-            l = [d2[key]]
-            zz = [item for sublist in l for item in sublist]
-            d1.update({key: d1[key]+zz})
-        if isinstance(d1[key], str) and d1[key] != d2[key]:
-            d1.update({key: d1[key] + '&' + d2[key]})
-        if isinstance(d1[key], np.ndarray):
-            if key == 'X':
-                d1.update({key: np.vstack((d1[key], d2[key]))})
-            elif key == 'y':
-                d1.update({key: np.vstack((d1[key].reshape(-1,1), 
-                                           d2[key].reshape(-1,1))).ravel()
-                          })
-    d1.update({'nr_classes': len(d1['target_classes'])})
-    if len(d1['target_classes']) != len(np.unique(d1['target_classes'])):
-        logging.warn('There are class duplicates!')
-
-    if namedtuple:
-        from collections import namedtuple
-        return namedtuple("MergedDataset", d1.keys())(*d1.values())
-    else:
-        return d1

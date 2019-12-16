@@ -53,11 +53,18 @@ class ModelConfiguration(object):
 
         if model_setting in ['CONV2D', 'conv2d']:
             self.input_shape = (129, 120, 1)
+        elif model_setting in ['gru','GRU','LSTM','lstm','conv1d','CONV1D']:
+            self.input_shape = (5000, 1)
+        elif model_setting == 'psd_dB':
+            self.input_shape = (129, 1)
+        else:
+            raise ValueError('Wrong model_setting provided.')
+
+        if model_setting in ['CONV2D', 'conv2d']:
             model = current_model(input_tensor = Input(shape = self.input_shape), 
                                 classes = len(target_names), 
                                 weights = None)
         elif model_setting in ['gru','GRU','LSTM','lstm']:
-            self.input_shape = (5000, 1)
             model = Sequential()
             model.add(Conv1D(16, 3, activation='relu', input_shape=self.input_shape))
             model.add(Conv1D(16, 3, activation='relu'))
@@ -87,7 +94,6 @@ class ModelConfiguration(object):
             model.add(Dropout(0.5))
             model.add(Dense(len(target_names), activation='softmax'))
         elif model_setting == 'wavenet':
-            self.input_shape = (5000, 1)
             model=Sequential()
             model.add(Conv1D(16, 3, activation='relu', input_shape=self.input_shape))
             for rate in (1,2,4,8)*2:
@@ -114,7 +120,6 @@ class ModelConfiguration(object):
             model.add(Dropout(0.5))
             model.add(Dense(len(target_names), activation='softmax'))
         elif model_setting in ['conv1d','CONV1D']:
-            self.input_shape = (5000, 1)
             model = Sequential()
             model.add(Conv1D(16, 3, activation='relu', input_shape=self.input_shape))
             model.add(Conv1D(16, 3, activation='relu'))
@@ -249,6 +254,7 @@ def train_generator(X_train, y_train, batch_size, target_names, setting='stft', 
 def valid_generator(X_val, y_val, batch_size, target_names, setting='stft', preprocessing_train_stats=None):
     from tensorflow.keras import utils
 
+    train_mean = preprocessing_train_stats.mean.squeeze() 
     obj = create_settings_obj(setting)
     while True:
         for start in range(0, len(X_val), batch_size):
@@ -266,7 +272,7 @@ def valid_generator(X_val, y_val, batch_size, target_names, setting='stft', prep
 
                 data = metamorphose(data, setting=setting, stg_obj=obj)
                 # Center data
-                data = data - preprocessing_train_stats.mean.squeeze() 
+                data = data - train_mean
                 # Expand dimensions
                 data = np.expand_dims(data, axis = -1)
 
@@ -495,6 +501,10 @@ def calculate_train_statistics(X_train=None, setting=None):
         train_matrix = train_matrix.reshape((len(X_train),129,120,1))
     elif setting == 'raw':
         train_matrix = train_matrix.reshape((len(X_train),5000,1))
+    elif setting == 'psd_dB':
+        train_matrix = train_matrix.reshape((len(X_train),129,1))
+    else:
+        raise ValueError('Wrong setting provided.')
 
     # train_stats.fit(train_matrix)
     train_stats.mean = np.mean(train_matrix, axis=(0,1))
@@ -507,139 +517,71 @@ def assign_groups(Xy_split=None, index=None):
     return df
 
 def train_model_ml(dataset=None, model_setting=None, splitting=None, data_setting=None,
-                    X_train=None, y_train=None,
-                    X_val=None, y_val=None,
-                    X_test=None, y_test=None, flag=None):
-    from sklearn.metrics import confusion_matrix
-    from sklearn.metrics import balanced_accuracy_score
+                    x_train=None, y_train=None,
+                    x_val=None, y_val=None,
+                    x_test=None, y_test=None, flag=None):
+
     from sklearn.neighbors import KNeighborsClassifier
-    from sklearn.model_selection import GridSearchCV, cross_val_score
-    from sklearn.model_selection import GridSearchCV
     from sklearn.ensemble import RandomForestClassifier
     from sklearn.model_selection import GridSearchCV
     from xgboost import XGBClassifier
     from wavhandler import make_df_parallel
+    from joblib import dump, load
+    from sklearn.metrics import confusion_matrix
+    from sklearn.metrics import balanced_accuracy_score
+    from sklearn.metrics import classification_report
+    from sklearn.model_selection import cross_val_score
 
     if model_setting.startswith('knn'):
-        parameters = {
-            'n_neighbors': [11, 13, 15, 17],
-            'weights': ['uniform', 'distance'],
-            'metric': ['euclidean', 'manhattan']
-        }
-
-        print(f'Using knn parameters:\n {parameters}')
-        estimator = KNeighborsClassifier()
-
+        estimator = KNeighborsClassifier(n_neighbors=11, weights='uniform',metric='manhattan', n_jobs=-1)
     elif model_setting.startswith('randomforest'):
-        parameters = {
-            'bootstrap': [True],
-            'max_depth': [None, 5, 10, 50, 100, 150],
-            #'max_features': [2, 3],
-            'min_samples_leaf': [3, 4, 5],
-            'min_samples_split': [8, 10, 12],
-            'max_features': ['auto', 'sqrt', 'log2'],
-            'criterion' :['gini', 'entropy'],
-            'n_estimators': [300, 400, 500]
-        }
-        print(f'Using {model_setting} parameters:\n {parameters}')
-        estimator = RandomForestClassifier(random_state=seed, 
-                                            verbose=True)
-
+        estimator = RandomForestClassifier(bootstrap=True, max_depth=None,
+                                            min_samples_leaf=3, min_samples_split=8,
+                                            max_features='auto', criterion='gini',
+                                            n_estimators=450, n_jobs=-1,
+                                            random_state=seed, verbose=True)
     elif model_setting.startswith('xgboost'):
-        parameters = {'max_depth': range (3, 5, 1),
-                    'n_estimators': range(340, 460, 40),
-                    'learning_rate': [0.3, 0.4, 0.5],
-                    'gamma': [0, 0.5]}
-
-        print(f'Using xgboost parameters:\n {parameters}')
-        estimator = XGBClassifier(param_grid=parameters,
-                                random_state=0,
-                                seed=seed,
-                                verbose=True)
+        estimator = XGBClassifier(max_depth=4,
+                                    n_estimators=450,
+                                    learning_rate=0.3,
+                                    gamma=0.5,
+                                    random_state=seed,
+                                    seed=seed,
+                                    verbose=True)
     else:
         raise NotImplementedError('Not implemented yet.')
 
-    gs = GridSearchCV(
-        estimator=estimator,
-        param_grid=parameters,
-        n_jobs = -1,
-        cv = 5,
-        verbose=True)
-
     if splitting in ['random', 'randomcv']:
-        X_train.extend(X_val)
-        y_train.extend(y_val)
-        x_train = make_df_parallel(names=X_train, setting=data_setting).values
-        x_test = make_df_parallel(names=X_test, setting=data_setting).values
+        gs = GridSearchCV(estimator=estimator,
+                        param_grid=parameters,
+                        n_jobs = -1,
+                        cv = 5,
+                        return_train_score=True,
+                        verbose=True)
         gs.fit(x_train, y_train)
-
-        t = time.time()
-        classifier = gs.best_estimator_
-        print(classifier)
-        print(f"Ran grid search in {time.time() - t} seconds")
-
-        t = time.time()
-        print("Fitting model in training data")
-        classifier.fit(x_train, y_train)
-        y_pred = classifier.predict_proba(x_test)
-        print(f"Fit model in {time.time() - t} seconds")
-
-        y_pred = np.argmax(y_pred, axis=1)
-
-        # Calculating confusion matrix
-        cm = confusion_matrix(y_test, y_pred)
-        print(cm)
-
-        ac = balanced_accuracy_score(y_test, y_pred)
-        print(f'Balanced Accuracy Score: {ac}')
-
-        t = time.time()
-        print("Saving model")
-        from joblib import dump, load
-        dump(classifier, f'temp_data/{splitting}_{data_setting}_{model_setting}_{ac:.2f}_{flag}.joblib') 
-        print(f"Saved model in {time.time() - t} seconds")
-
-    elif splitting == 'custom':
-        x_train = make_df_parallel(names=X_train, setting=data_setting).values
-        x_val = make_df_parallel(names=X_val, setting=data_setting).values
-        x_test = make_df_parallel(names=X_test, setting=data_setting).values
-
-        gs.fit(x_train, y_train)
-
-        classifier = gs.best_estimator_
-        print(classifier)
-
-        classifier.fit(x_train, y_train)
-        y_pred = classifier.predict_proba(x_val)
-        y_pred = np.argmax(y_pred, axis=1)
-    
-        cm = confusion_matrix(y_val, y_pred)
-        bacc = balanced_accuracy_score(y_val, y_pred)
-
-        from joblib import dump, load
-        dump(classifier, f'temp_data/{splitting}_{data_setting}_{model_setting}_{bacc:.2f}_{flag}.joblib') 
-        with open(f'temp_data/{splitting}_{data_setting}_{model_setting}_{flag}_results.txt', "a+") as resultsfile:
-            resultsfile.write(f'bal_acc:{bacc}, \n{cm}\n')
-
-        # FITTING ON TRAIN AND VAL AND TESTING ON TEST
-        X_train.extend(X_val)
-        y_train.extend(y_val)
-        x_train = make_df_parallel(names=X_train, setting=data_setting).values
-
-        classifier.fit(x_train, y_train)
-        y_pred = classifier.predict_proba(x_test)
-        y_pred = np.argmax(y_pred, axis=1)
-    
+        cv_score = gridsearch.best_score_
+        estimator = gridsearch.best_estimator_
+        y_pred = np.argmax( estimator.predict_proba(x_test) , axis=1)
         cm = confusion_matrix(y_test, y_pred)
         bacc = balanced_accuracy_score(y_test, y_pred)
+        clf_report = classification_report(y_test, y_pred, target_names=dataset.target_classes)
 
-        from joblib import dump, load
-        dump(classifier, f'temp_data/{splitting}_{data_setting}_{model_setting}_{bacc:.2f}_{flag}fit_on_TrainVal.joblib')
-        with open(f'temp_data/{splitting}_{data_setting}_{model_setting}_{flag}_results.txt', "a+") as resultsfile:
-            resultsfile.write(f'\nfitontrainval_\nbal_acc:{bacc}, \n{cm}\n')
+    elif splitting == 'custom':
+        estimator.fit(x_train,y_train)
 
-    return classifier
+        cv_score = 'na'
+        y_pred = np.argmax( estimator.predict_proba(x_val) , axis=1)
+        cm = confusion_matrix(y_val, y_pred)
+        bacc = balanced_accuracy_score(y_val, y_pred)
+        clf_report = classification_report(y_val, y_pred, target_names=dataset.target_classes)
+    else:
+        raise ValueError('Wrong splitting method provided.')
 
+    dump(estimator, f'temp_data/{splitting}_{data_setting}_{model_setting}_{bacc:.2f}_{flag}.joblib') 
+    with open(f'temp_data/{splitting}_{data_setting}_{model_setting}_{flag}_results.txt', "a+") as resultsfile:
+        resultsfile.write(f'classifier: {estimator}, \ncv_score: {cv_score}, bal_acc:{bacc}, \n{cm}\n{clf_report}\n')
+
+    return estimator
 
 def train_model_dl(dataset=None, model_setting=None, splitting=None, data_setting=None, cnn_if_2d=None,
                 X_train=None, y_train=None,
