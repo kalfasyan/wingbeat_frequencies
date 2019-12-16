@@ -13,6 +13,8 @@ import math
 from utils import crop_rec, TEMP_DATADIR
 from wavhandler import Dataset, BASE_DIR
 import time
+import multiprocessing
+n_cpus = multiprocessing.cpu_count()
 
 class ModelConfiguration(object):
     def __init__(self, model_setting=None, cnn_if_2d=None, target_names=None):
@@ -511,34 +513,30 @@ def calculate_train_statistics(X_train=None, setting=None):
 
     return train_stats
 
-def assign_groups(Xy_split=None, index=None):
-    df = pd.DataFrame(Xy_split, columns=['filenames'])
-    df['group'] = index
-    return df
-
 def train_model_ml(dataset=None, model_setting=None, splitting=None, data_setting=None,
                     x_train=None, y_train=None,
                     x_val=None, y_val=None,
                     x_test=None, y_test=None, flag=None):
-
+    """
+    Used to train ML models on wingbeat data, depending on the splitting method chosen (random/randomcv or custom).
+    Models used so far: KNeighborsClassifier, RandomForestClassifier, XGBXClassifier
+    """
     from sklearn.neighbors import KNeighborsClassifier
     from sklearn.ensemble import RandomForestClassifier
-    from sklearn.model_selection import GridSearchCV
+    from sklearn.model_selection import GridSearchCV, cross_val_score, cross_validate
     from xgboost import XGBClassifier
     from wavhandler import make_df_parallel
     from joblib import dump, load
-    from sklearn.metrics import confusion_matrix
-    from sklearn.metrics import balanced_accuracy_score
-    from sklearn.metrics import classification_report
-    from sklearn.model_selection import cross_val_score
+    from sklearn.metrics import confusion_matrix, balanced_accuracy_score, classification_report, make_scorer
 
+    # Defining the chosen estimator
     if model_setting.startswith('knn'):
-        estimator = KNeighborsClassifier(n_neighbors=11, weights='uniform',metric='manhattan', n_jobs=-1)
+        estimator = KNeighborsClassifier(n_neighbors=11, weights='uniform',metric='manhattan', n_jobs=min(8,n_cpus))
     elif model_setting.startswith('randomforest'):
         estimator = RandomForestClassifier(bootstrap=True, max_depth=None,
                                             min_samples_leaf=3, min_samples_split=8,
                                             max_features='auto', criterion='gini',
-                                            n_estimators=450, n_jobs=-1,
+                                            n_estimators=450, n_jobs=min(8,n_cpus),
                                             random_state=seed, verbose=True)
     elif model_setting.startswith('xgboost'):
         estimator = XGBClassifier(max_depth=4,
@@ -551,21 +549,29 @@ def train_model_ml(dataset=None, model_setting=None, splitting=None, data_settin
     else:
         raise NotImplementedError('Not implemented yet.')
 
+    # Training and reporting cross-validation and test results by saving them to a text file.
     if splitting in ['random', 'randomcv']:
-        gs = GridSearchCV(estimator=estimator,
-                        param_grid=parameters,
-                        n_jobs = -1,
-                        cv = 5,
-                        return_train_score=True,
-                        verbose=True)
-        gs.fit(x_train, y_train)
-        cv_score = gridsearch.best_score_
-        estimator = gridsearch.best_estimator_
-        y_pred = np.argmax( estimator.predict_proba(x_test) , axis=1)
-        cm = confusion_matrix(y_test, y_pred)
-        bacc = balanced_accuracy_score(y_test, y_pred)
-        clf_report = classification_report(y_test, y_pred, target_names=dataset.target_classes)
+        cvfolds = 5
+        cv_results = cross_validate(estimator, x_train, y_train, cv=cvfolds, 
+                                    return_estimator=True, 
+                                    return_train_score=True, 
+                                    scoring=make_scorer(balanced_accuracy_score),
+                                    verbose=1, 
+                                    n_jobs=min(8, n_cpus)) 
 
+        mean_train_score = np.mean(cv_results['train_score'])
+        mean_val_score = np.mean(cv_results['test_score'])
+
+        y_preds = [cv_results['estimator'][i].predict(x_test) for i in range(cvfolds)]
+        cms = [confusion_matrix(y_test, y_preds[i]) for i in range(cvfolds)]
+        b_accs = [balanced_accuracy_score(y_test, y_preds[i]) for i in range(cvfolds)]
+        clf_reports = [classification_report(y_test, y_preds[i], target_names=dataset.target_classes) for i in range(cvfolds)]
+
+        for i in range(cvfolds):
+            with open(f'temp_data/{splitting}_{data_setting}_{model_setting}_{flag}_results.txt', "a+") as resultsfile:
+                if i == 0:
+                    resultsfile.write(f'mean_train_score: {mean_train_score}, mean_val_score: {mean_val_score}\n')
+                resultsfile.write(f'\n\n\t\tFOLD #: {i}\n,train_score: {cv_results["train_score"][i]}, val_score: {cv_results["test_score"][i]}, balanced_accuracy_on_test: {b_accs[i]}\nconfusion_matrix:\n{cms[i]}\nclassification_report:\n{clf_reports[i]}\n')
     elif splitting == 'custom':
         estimator.fit(x_train,y_train)
 
@@ -574,12 +580,12 @@ def train_model_ml(dataset=None, model_setting=None, splitting=None, data_settin
         cm = confusion_matrix(y_val, y_pred)
         bacc = balanced_accuracy_score(y_val, y_pred)
         clf_report = classification_report(y_val, y_pred, target_names=dataset.target_classes)
+
+        dump(estimator, f'temp_data/{splitting}_{data_setting}_{model_setting}_{bacc:.2f}_{flag}.joblib') 
+        with open(f'temp_data/{splitting}_{data_setting}_{model_setting}_{flag}_results.txt', "a+") as resultsfile:
+            resultsfile.write(f'classifier: {estimator}, \ncv_score: {cv_score}, bal_acc:{bacc}, \n{cm}\n{clf_report}\n')
     else:
         raise ValueError('Wrong splitting method provided.')
-
-    dump(estimator, f'temp_data/{splitting}_{data_setting}_{model_setting}_{bacc:.2f}_{flag}.joblib') 
-    with open(f'temp_data/{splitting}_{data_setting}_{model_setting}_{flag}_results.txt', "a+") as resultsfile:
-        resultsfile.write(f'classifier: {estimator}, \ncv_score: {cv_score}, bal_acc:{bacc}, \n{cm}\n{clf_report}\n')
 
     return estimator
 
@@ -599,7 +605,7 @@ def train_model_dl(dataset=None, model_setting=None, splitting=None, data_settin
             metrics=['accuracy'])
 
     train_stats = calculate_train_statistics(X_train=X_train, setting=data_setting)
-
+    # Actual training
     model.fit_generator(train_generator(X_train, y_train, 
                                         batch_size=traincf.batch_size,
                                         target_names=traincf.target_names,
@@ -614,7 +620,6 @@ def train_model_dl(dataset=None, model_setting=None, splitting=None, data_settin
                                                             preprocessing_train_stats=train_stats),
                         validation_steps=int(math.ceil(float(len(X_test))/float(traincf.batch_size))),
                         callbacks = traincf.callbacks_list)
-
     # Getting test set predictions
     model.load_weights(traincf.top_weights_path)
     y_pred = model.predict_generator(valid_generator(X_test, 
@@ -624,7 +629,6 @@ def train_model_dl(dataset=None, model_setting=None, splitting=None, data_settin
                                                     target_names=traincf.target_names,
                                                     preprocessing_train_stats=train_stats),
             steps = int(math.ceil(float(len(X_test)) / float(traincf.batch_size))))
-
     # Evaluating accuracy on test set
     model.load_weights(traincf.top_weights_path)
     loss, acc = model.evaluate_generator(valid_generator(X_test, 
@@ -634,9 +638,9 @@ def train_model_dl(dataset=None, model_setting=None, splitting=None, data_settin
                                                         target_names=traincf.target_names,
                                                         preprocessing_train_stats=train_stats),
             steps = int(math.ceil(float(len(X_test)) / float(traincf.batch_size))))
-
+    # Calculating the balanced accuracy on the test set and creating confusion matrix
     bacc = balanced_accuracy_score(np.array(y_test), np.argmax(y_pred, axis=1))
     cm = confusion_matrix(np.array(y_test), np.argmax(y_pred, axis=1))
-
+    # Saving results
     with open(f'temp_data/{splitting}_{data_setting}_{model_setting}_{cnn_if_2d}_{flag}_results.txt', "a+") as resultsfile:
         resultsfile.write(f'test_acc:{acc}, loss: {loss}, bal_acc:{bacc}, \n{cm}\n')
