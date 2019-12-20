@@ -17,8 +17,8 @@ model_setting = sys.argv[3]
 cnn_if_2d = sys.argv[4]
 
 assert splitting in ['random','randomcv','custom'], "Wrong splitting method given."
-assert data_setting in ['raw','stft'], "Wrong data settting given."
-assert model_setting in ['wavenet','lstm','gru','LSTM','GRU','CONV1D','CONV2D','conv1d','conv2d']
+assert data_setting in ['raw','stft','psd_dB'], "Wrong data settting given."
+assert model_setting in ['wavenet','lstm','gru','LSTM','GRU','CONV1D','CONV2D','conv1d','conv2d','conv1d_psd','CONV1D_psd']
 
 data = Dataset('Wingbeats')
 print(data.target_classes)
@@ -38,7 +38,7 @@ if splitting in ['random', 'randomcv']:
                     X_test=X_test, 
                     y_test=y_test,
                     cnn_if_2d=cnn_if_2d,
-                    flag='data_centering')
+                    flag='na')
 elif splitting == 'custom':
     for i in range(5):
         xtrain, ytrain = shuffle(X_train[i], y_train[i], random_state=seed)

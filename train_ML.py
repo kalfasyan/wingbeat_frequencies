@@ -43,36 +43,52 @@ if splitting in ['random', 'randomcv']:
                             x_test=x_test, 
                             y_test=y_test,
                             flag='ML')
+
 elif splitting == 'custom':
     from joblib import dump, load
-    from sklearn.metrics import confusion_matrix
-    from sklearn.metrics import balanced_accuracy_score
-    from sklearn.metrics import classification_report
+    from sklearn.metrics import confusion_matrix, classification_report, balanced_accuracy_score, log_loss
     from sklearn.model_selection import cross_val_score
 
+    train_scores, val_scores, cms, b_accs, logloss, clf_reports = [],[],[],[],[],[]
     for i in range(5):
         x_train_fold = make_df_parallel(names=X_train[i], setting=data_setting).values
         x_val_fold = make_df_parallel(names=X_val[i], setting=data_setting).values
         estimator = train_model_ml(dataset=data,
-                                model_setting=model_setting,
-                                splitting=splitting, 
-                                data_setting=data_setting,
-                                x_train=x_train_fold, 
-                                y_train=y_train[i], 
-                                x_val=x_val_fold, 
-                                y_val=y_val[i], 
-                                x_test=x_test, 
-                                y_test=y_test,
-                                flag=f'split_{i}')
+                                    model_setting=model_setting,
+                                    splitting=splitting, 
+                                    data_setting=data_setting,
+                                    x_train=x_train_fold, 
+                                    y_train=y_train[i], 
+                                    x_val=x_val_fold, 
+                                    y_val=y_val[i], 
+                                    x_test=x_test, 
+                                    y_test=y_test,
+                                    flag=f'split_{i}')
 
-        y_train[i].extend(y_val[i])
-        estimator.fit(np.vstack((x_train_fold, x_val_fold)), y_train[i])
+        y_preds = estimator.predict(x_test)
+        y_pred_probas = estimator.predict_proba(x_test)
 
-        y_pred = np.argmax( estimator.predict_proba(x_test) , axis=1)
-        cm = confusion_matrix(y_test, y_pred)
-        bacc = balanced_accuracy_score(y_test, y_pred)
-        clf_report = classification_report(y_test, y_pred, target_names=data.target_classes)
+        train_scores.append( balanced_accuracy_score(y_train[i], estimator.predict(x_train_fold)) )
+        val_scores.append( balanced_accuracy_score(y_val[i], estimator.predict(x_val_fold)) )
+        cms.append(confusion_matrix(y_test, y_preds))
+        b_accs.append(balanced_accuracy_score(y_test, y_preds))
+        logloss.append(log_loss(y_test, y_pred_probas))
+        clf_reports.append(classification_report(y_test, y_preds, target_names=data.target_classes))
 
-        dump(estimator, f'temp_data/{splitting}_{data_setting}_{model_setting}_{bacc:.2f}_split_{i}_test.joblib') 
-        with open(f'temp_data/{splitting}_{data_setting}_{model_setting}_split_{i}_test_results.txt', "a+") as resultsfile:
-            resultsfile.write(f'classifier: {estimator}, \nbal_acc:{bacc}, \n{cm}\n{clf_report}\n')
+        with open(f'temp_data/{splitting}_{data_setting}_{model_setting}_results.txt', "a+") as resultsfile:
+            resultsfile.write(f'\n\n\t\tFOLD #: {i}\n '
+                                f'train_score: {train_scores[i]},' 
+                                f'val_score: {val_scores[i]},' 
+                                f'balanced_accuracy_on_test: {b_accs[i]}\n,' 
+                                f'log_loss_on_test: {logloss[i]}\n,' 
+                                f'confusion_matrix:\n{cms[i]}\n' 
+                                f'classification_report:\n{clf_reports[i]}\n')
+
+    mean_train_score = np.mean(train_scores)
+    mean_val_score = np.mean(val_scores)
+    mean_test_score = np.mean(b_accs)
+
+    with open(f'temp_data/{splitting}_{data_setting}_{model_setting}_results.txt', "a+") as resultsfile:
+        resultsfile.write(f'mean_train_score: {mean_train_score},'
+                            f'mean_val_score: {mean_val_score},'
+                            f'mean_test_score: {mean_test_score}\n') 

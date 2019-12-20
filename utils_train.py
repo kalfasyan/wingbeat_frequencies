@@ -14,6 +14,7 @@ from utils import crop_rec, TEMP_DATADIR
 from wavhandler import Dataset, BASE_DIR
 import time
 import multiprocessing
+import datetime
 n_cpus = multiprocessing.cpu_count()
 
 class ModelConfiguration(object):
@@ -24,6 +25,7 @@ class ModelConfiguration(object):
         from tensorflow.keras.optimizers import SGD
         from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping, ReduceLROnPlateau, CSVLogger
         from tensorflow.keras.utils import to_categorical
+        from tensorflow.keras.regularizers import l2
         # MODELS
         from tensorflow.keras.applications.densenet import DenseNet121, DenseNet169, DenseNet201
         from tensorflow.keras.applications.inception_resnet_v2 import InceptionResNetV2
@@ -57,7 +59,7 @@ class ModelConfiguration(object):
             self.input_shape = (129, 120, 1)
         elif model_setting in ['gru','GRU','LSTM','lstm','conv1d','CONV1D']:
             self.input_shape = (5000, 1)
-        elif model_setting == 'psd_dB':
+        elif model_setting in ['conv1d_psd','CONV1D_psd']:
             self.input_shape = (129, 1)
         else:
             raise ValueError('Wrong model_setting provided.')
@@ -121,7 +123,7 @@ class ModelConfiguration(object):
             model.add(GlobalAveragePooling1D())
             model.add(Dropout(0.5))
             model.add(Dense(len(target_names), activation='softmax'))
-        elif model_setting in ['conv1d','CONV1D']:
+        elif model_setting in ['conv1d','CONV1D','conv1d_psd','CONV1D_psd']:
             model = Sequential()
             model.add(Conv1D(16, 3, activation='relu', input_shape=self.input_shape))
             model.add(Conv1D(16, 3, activation='relu'))
@@ -151,7 +153,7 @@ class ModelConfiguration(object):
 
 class TrainConfiguration(object):
     """ Configuration for training procedures. Contains all settings """
-    def __init__(self, dataset=None, setting='raw', model_name='test', batch_size=32, monitor='val_accuracy', 
+    def __init__(self, dataset=None, setting='raw', model_name='test', batch_size=32, monitor='val_loss', 
                 es_patience=7, rlr_patience=3, epochs=100):
         from tensorflow.keras.models import Sequential
         from tensorflow.keras.layers import Dense, Dropout, Activation
@@ -159,7 +161,7 @@ class TrainConfiguration(object):
         from tensorflow.keras.optimizers import SGD
         from tensorflow.keras.layers import BatchNormalization
         from sklearn.model_selection import train_test_split
-        from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping, ReduceLROnPlateau, CSVLogger
+        from tensorflow.keras.callbacks import ModelCheckpoint, TensorBoard, EarlyStopping, ReduceLROnPlateau, CSVLogger
         from tensorflow.keras.utils import to_categorical
         from tensorflow.keras import utils
 
@@ -169,6 +171,7 @@ class TrainConfiguration(object):
         self.model_name = model_name
         self.top_weights_path = TEMP_DATADIR + str(self.model_name) + '.h5'
         self.logfile = TEMP_DATADIR + str(self.model_name) + '.log'
+        self.log_dir = f"{TEMP_DATADIR}/logs/fit/{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}"
         self.batch_size = batch_size
         self.monitor = monitor
         self.es_patience = es_patience
@@ -188,7 +191,8 @@ class TrainConfiguration(object):
                                             factor = 0.1,
                                             patience = self.rlr_patience,
                                             verbose = 1),
-                                CSVLogger(filename = self.logfile)]
+                                # CSVLogger(filename = self.logfile),
+                                TensorBoard(log_dir=self.log_dir, histogram_freq=1, profile_batch=0)]
 
 
 def shift(x, wshift, hshift, row_axis = 0, col_axis = 1, channel_axis = 2, fill_mode = 'constant', cval = 0.):
@@ -304,6 +308,9 @@ def metamorphose(data, setting='stft', stg_obj=None, img_sz=150):
         data = np.flipud(data)
     elif setting == 'raw':
         return data
+    elif setting == 'psd_dB':
+        data = 10*np.log10(signal.welch(data, fs=F_S, window='hanning', nperseg=256, noverlap=128+64)[1])
+        return data
     # elif setting=='gasf':
     #     data = stg_obj.fit_transform(data.reshape(1,-1)).squeeze()
     # elif setting=='gadf':
@@ -319,11 +326,7 @@ def metamorphose(data, setting='stft', stg_obj=None, img_sz=150):
 
 def create_settings_obj(setting='gasf', img_sz=150):
     # from pyts.image import GramianAngularField, RecurrencePlot, MarkovTransitionField
-    if setting == 'stft':
-        obj = None
-    elif setting == 'melspec':
-        obj = None
-    elif setting == 'raw':
+    if setting == 'stft' or setting == 'melspec' or setting == 'raw' or setting == 'psd_dB':
         obj = None
     # elif setting == 'gasf':
     #     obj = GramianAngularField(image_size=img_sz, method='summation')
@@ -527,7 +530,7 @@ def train_model_ml(dataset=None, model_setting=None, splitting=None, data_settin
     from xgboost import XGBClassifier
     from wavhandler import make_df_parallel
     from joblib import dump, load
-    from sklearn.metrics import confusion_matrix, balanced_accuracy_score, classification_report, make_scorer
+    from sklearn.metrics import confusion_matrix, balanced_accuracy_score, classification_report, make_scorer, log_loss
 
     # Defining the chosen estimator
     if model_setting.startswith('knn'):
@@ -559,31 +562,34 @@ def train_model_ml(dataset=None, model_setting=None, splitting=None, data_settin
                                     verbose=1, 
                                     n_jobs=min(8, n_cpus)) 
 
-        mean_train_score = np.mean(cv_results['train_score'])
-        mean_val_score = np.mean(cv_results['test_score'])
-
         y_preds = [cv_results['estimator'][i].predict(x_test) for i in range(cvfolds)]
+        y_pred_probas = [cv_results['estimator'][i].predict_proba(x_test) for i in range(cvfolds)]
+
         cms = [confusion_matrix(y_test, y_preds[i]) for i in range(cvfolds)]
         b_accs = [balanced_accuracy_score(y_test, y_preds[i]) for i in range(cvfolds)]
+        logloss = [log_loss(y_test, y_pred_probas[i]) for i in range(cvfolds)]
         clf_reports = [classification_report(y_test, y_preds[i], target_names=dataset.target_classes) for i in range(cvfolds)]
+
+        mean_train_score = np.mean(cv_results['train_score'])
+        mean_val_score = np.mean(cv_results['test_score'])
+        mean_test_score = np.mean(b_accs)
 
         for i in range(cvfolds):
             with open(f'temp_data/{splitting}_{data_setting}_{model_setting}_{flag}_results.txt', "a+") as resultsfile:
                 if i == 0:
-                    resultsfile.write(f'mean_train_score: {mean_train_score}, mean_val_score: {mean_val_score}\n')
-                resultsfile.write(f'\n\n\t\tFOLD #: {i}\n,train_score: {cv_results["train_score"][i]}, val_score: {cv_results["test_score"][i]}, balanced_accuracy_on_test: {b_accs[i]}\nconfusion_matrix:\n{cms[i]}\nclassification_report:\n{clf_reports[i]}\n')
+                    resultsfile.write(f'mean_train_score: {mean_train_score},'
+                                        f'mean_val_score: {mean_val_score},'
+                                        f'mean_test_score: {mean_test_score}\n') 
+                resultsfile.write(f'\n\n\t\tFOLD #: {i}\n '
+                                    f'train_score: {cv_results["train_score"][i]},' 
+                                    f'val_score: {cv_results["test_score"][i]},' 
+                                    f'balanced_accuracy_on_test: {b_accs[i]}\n,' 
+                                    f'log_loss_on_test: {logloss[i]}\n,' 
+                                    f'confusion_matrix:\n{cms[i]}\n' 
+                                    f'classification_report:\n{clf_reports[i]}\n')
     elif splitting == 'custom':
         estimator.fit(x_train,y_train)
-
-        cv_score = 'na'
-        y_pred = np.argmax( estimator.predict_proba(x_val) , axis=1)
-        cm = confusion_matrix(y_val, y_pred)
-        bacc = balanced_accuracy_score(y_val, y_pred)
-        clf_report = classification_report(y_val, y_pred, target_names=dataset.target_classes)
-
-        dump(estimator, f'temp_data/{splitting}_{data_setting}_{model_setting}_{bacc:.2f}_{flag}.joblib') 
-        with open(f'temp_data/{splitting}_{data_setting}_{model_setting}_{flag}_results.txt', "a+") as resultsfile:
-            resultsfile.write(f'classifier: {estimator}, \ncv_score: {cv_score}, bal_acc:{bacc}, \n{cm}\n{clf_report}\n')
+        return estimator
     else:
         raise ValueError('Wrong splitting method provided.')
 
@@ -593,8 +599,8 @@ def train_model_dl(dataset=None, model_setting=None, splitting=None, data_settin
                 X_train=None, y_train=None,
                 X_val=None, y_val=None,
                 X_test=None, y_test=None, flag=None):
-    from sklearn.metrics import confusion_matrix
-    from sklearn.metrics import balanced_accuracy_score
+    from sklearn.metrics import confusion_matrix, balanced_accuracy_score, classification_report, make_scorer, log_loss
+
 
     print(f'processing: {cnn_if_2d}_{flag}')
     traincf = TrainConfiguration(dataset=dataset, setting=data_setting, model_name=f'{splitting}_{data_setting}_{model_setting}_{cnn_if_2d}_{flag}')
@@ -606,7 +612,7 @@ def train_model_dl(dataset=None, model_setting=None, splitting=None, data_settin
 
     train_stats = calculate_train_statistics(X_train=X_train, setting=data_setting)
     # Actual training
-    model.fit_generator(train_generator(X_train, y_train, 
+    h = model.fit_generator(train_generator(X_train, y_train, 
                                         batch_size=traincf.batch_size,
                                         target_names=traincf.target_names,
                                         setting=traincf.setting,
@@ -619,9 +625,20 @@ def train_model_dl(dataset=None, model_setting=None, splitting=None, data_settin
                                                             setting=traincf.setting,
                                                             preprocessing_train_stats=train_stats),
                         validation_steps=int(math.ceil(float(len(X_test))/float(traincf.batch_size))),
-                        callbacks = traincf.callbacks_list)
-    # Getting test set predictions
+                        callbacks=traincf.callbacks_list,
+                        use_multiprocessing=False,
+                        workers=1,
+                        max_queue_size=32)
+
+    train_loss = h.history['loss']
+    train_score = h.history['accuracy']
+    val_loss = h.history['val_loss']
+    val_score = h.history['val_accuracy']
+    lr = h.history['lr']
+
+    # LOADING TRAINED WEIGHTS
     model.load_weights(traincf.top_weights_path)
+
     y_pred = model.predict_generator(valid_generator(X_test, 
                                                     y_test, 
                                                     batch_size=traincf.batch_size, 
@@ -629,18 +646,35 @@ def train_model_dl(dataset=None, model_setting=None, splitting=None, data_settin
                                                     target_names=traincf.target_names,
                                                     preprocessing_train_stats=train_stats),
             steps = int(math.ceil(float(len(X_test)) / float(traincf.batch_size))))
-    # Evaluating accuracy on test set
-    model.load_weights(traincf.top_weights_path)
-    loss, acc = model.evaluate_generator(valid_generator(X_test, 
-                                                        y_test, 
-                                                        batch_size=traincf.batch_size, 
-                                                        setting=traincf.setting, 
-                                                        target_names=traincf.target_names,
-                                                        preprocessing_train_stats=train_stats),
-            steps = int(math.ceil(float(len(X_test)) / float(traincf.batch_size))))
-    # Calculating the balanced accuracy on the test set and creating confusion matrix
     bacc = balanced_accuracy_score(np.array(y_test), np.argmax(y_pred, axis=1))
     cm = confusion_matrix(np.array(y_test), np.argmax(y_pred, axis=1))
+    test_loss = log_loss(y_test, y_pred)
+    clf_report = classification_report(y_test, np.argmax(y_pred, axis=1))
+
     # Saving results
-    with open(f'temp_data/{splitting}_{data_setting}_{model_setting}_{cnn_if_2d}_{flag}_results.txt', "a+") as resultsfile:
-        resultsfile.write(f'test_acc:{acc}, loss: {loss}, bal_acc:{bacc}, \n{cm}\n')
+    with open(f'temp_data/{splitting}_{data_setting}_{model_setting}_results.txt', "a+") as resultsfile:
+        resultsfile.write(f'\n\n\t\tFOLD #: {flag}\n '
+                            f'train_score: {train_score}\n'
+                            f'train_loss: {train_loss}\n' 
+                            f'val_score: {val_score}\n' 
+                            f'val_loss: {val_loss}\n'
+                            f'balanced_accuracy_on_test: {bacc}\n' 
+                            f'log_loss_on_test: {test_loss}\n' 
+                            f'learning_rate: {lr}\n'
+                            f'confusion_matrix:\n{cm}\n' 
+                            f'classification_report:\n{clf_report}\n')
+
+    import deepdish as dd
+    results = h.history
+    results['train_score'] = train_score
+    results['train_loss'] = train_loss
+    results['val_score'] = val_score
+    results['val_loss'] = val_loss
+    results['balanced_acc_test'] = bacc
+    results['logloss_test'] = test_loss
+    results['learning_rate'] = lr
+    results['y_pred'] = y_pred
+    results['y_test'] = y_test
+    
+    # Save it under the form of a json file
+    dd.io.save(f'temp_data/{splitting}_{data_setting}_{model_setting}_results.h5', {f'results_{flag}': results})

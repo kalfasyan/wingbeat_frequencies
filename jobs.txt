@@ -1,0 +1,11 @@
+# ML
+python train_ML.py random psd_dB knn && python train_ML.py random psd_dB randomforest && python train_ML.py random psd_dB xgboost && python train_ML.py randomcv psd_dB knn && python train_ML.py randomcv psd_dB randomforest && python train_ML.py randomcv psd_dB xgboost && python train_ML.py custom psd_dB knn && python train_ML.py custom psd_dB randomforest && python train_ML.py custom psd_dB xgboost
+# CONV1D & GRU with psd_dB
+python train_DL.py random psd_dB conv1d_psd na && python train_DL.py randomcv psd_dB conv1d_psd na && python train_DL.py custom psd_dB conv1d_psd na 
+python train_DL.py random psd_dB gru na && python train_DL.py randomcv psd_dB gru na && python train_DL.py custom psd_dB gru na 
+# CONV1d & GRU
+python train_DL.py random raw conv1d na && python train_DL.py randomcv raw conv1d na && python train_DL.py custom raw conv1d na 
+python train_DL.py random raw gru na && python train_DL.py randomcv raw gru na && python train_DL.py custom raw gru na 
+
+# CONV2D
+python train_DL.py random stft conv2d DenseNet121 && python train_DL.py randomcv stft conv2d DenseNet121 && python train_DL.py custom stft conv2d DenseNet121 
