@@ -26,32 +26,39 @@ print(data.target_classes)
 print(f'SPLITTING DATA {splitting}')
 X_train, X_val, X_test, y_train, y_val, y_test = mosquito_data_split(splitting=splitting, dataset=data)
 
+results = {}
 if splitting in ['random', 'randomcv']:
-    train_model_dl(dataset=data,
-                    model_setting=model_setting,
-                    splitting=splitting, 
-                    data_setting=data_setting,
-                    X_train=X_train, 
-                    y_train=y_train, 
-                    X_val=X_val, 
-                    y_val=y_val, 
-                    X_test=X_test, 
-                    y_test=y_test,
-                    cnn_if_2d=cnn_if_2d,
-                    flag='na')
+    res = train_model_dl(dataset=data,
+                        model_setting=model_setting,
+                        splitting=splitting, 
+                        data_setting=data_setting,
+                        X_train=X_train, 
+                        y_train=y_train, 
+                        X_val=X_val, 
+                        y_val=y_val, 
+                        X_test=X_test, 
+                        y_test=y_test,
+                        cnn_if_2d=cnn_if_2d,
+                        flag='na')
+    results[splitting] = res
 elif splitting == 'custom':
     for i in range(5):
         xtrain, ytrain = shuffle(X_train[i], y_train[i], random_state=seed)
         xval, yval = shuffle(X_val[i], y_val[i], random_state=seed)
-        train_model_dl(dataset=data,
-                        model_setting=model_setting,
-                        splitting=splitting, 
-                        data_setting=data_setting,
-                        X_train=xtrain, 
-                        y_train=ytrain, 
-                        X_val=xval, 
-                        y_val=yval, 
-                        X_test=X_test, 
-                        y_test=y_test,
-                        cnn_if_2d=cnn_if_2d,
-                        flag=f'split_{i}')
+        res = train_model_dl(dataset=data,
+                            model_setting=model_setting,
+                            splitting=splitting, 
+                            data_setting=data_setting,
+                            X_train=xtrain, 
+                            y_train=ytrain, 
+                            X_val=xval, 
+                            y_val=yval, 
+                            X_test=X_test, 
+                            y_test=y_test,
+                            cnn_if_2d=cnn_if_2d,
+                            flag=f'split_{i}')
+        results[f'{splitting}_{i}'] = res
+
+import deepdish as dd
+dd.io.save(f'temp_data/{splitting}_{data_setting}_{model_setting}_results.h5', 
+            {f'results': results})

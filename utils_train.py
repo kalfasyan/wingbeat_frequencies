@@ -18,7 +18,7 @@ import datetime
 n_cpus = multiprocessing.cpu_count()
 
 class ModelConfiguration(object):
-    def __init__(self, model_setting=None, cnn_if_2d=None, target_names=None):
+    def __init__(self, model_setting=None, data_setting=None, cnn_if_2d=None, target_names=None):
         from tensorflow.keras.models import Sequential
         from tensorflow.keras.layers import Dense, Dropout, Activation, BatchNormalization,Input, LSTM, GRU
         from tensorflow.keras.layers import Conv1D, GlobalAveragePooling1D, MaxPooling1D
@@ -55,20 +55,20 @@ class ModelConfiguration(object):
         elif cnn_if_2d == 'VGG19':
             current_model = VGG19
 
-        if model_setting in ['CONV2D', 'conv2d']:
+        if data_setting == 'stft':
             self.input_shape = (129, 120, 1)
-        elif model_setting in ['gru','lstm','conv1d','CONV1D']:
+        elif data_setting == 'raw':
             self.input_shape = (5000, 1)
-        elif model_setting in ['conv1d_psd','CONV1D_psd','gru_psd','lstm_psd']:
+        elif data_setting == 'psd_dB':
             self.input_shape = (129, 1)
         else:
-            raise ValueError('Wrong model_setting provided.')
+            raise ValueError('Wrong data_setting provided.')
 
-        if model_setting in ['CONV2D', 'conv2d']:
+        if model_setting == 'conv2d':
             model = current_model(input_tensor = Input(shape = self.input_shape), 
                                 classes = len(target_names), 
                                 weights = None)
-        elif model_setting in ['gru','lstm', 'gru_psd', 'lstm_psd']:
+        elif model_setting in ['gru','lstm']:
             model = Sequential()
             model.add(Conv1D(16, 3, activation='relu', input_shape=self.input_shape))
             model.add(Conv1D(16, 3, activation='relu'))
@@ -123,7 +123,7 @@ class ModelConfiguration(object):
             model.add(GlobalAveragePooling1D())
             model.add(Dropout(0.5))
             model.add(Dense(len(target_names), activation='softmax'))
-        elif model_setting in ['conv1d','CONV1D','conv1d_psd','CONV1D_psd']:
+        elif model_setting == 'conv1d':
             model = Sequential()
             model.add(Conv1D(16, 3, activation='relu', input_shape=self.input_shape))
             model.add(Conv1D(16, 3, activation='relu'))
@@ -603,8 +603,13 @@ def train_model_dl(dataset=None, model_setting=None, splitting=None, data_settin
 
 
     print(f'processing: {cnn_if_2d}_{flag}')
-    traincf = TrainConfiguration(dataset=dataset, setting=data_setting, model_name=f'{splitting}_{data_setting}_{model_setting}_{cnn_if_2d}_{flag}')
-    model = ModelConfiguration(model_setting=model_setting, cnn_if_2d=cnn_if_2d, target_names=traincf.target_names).config
+    traincf = TrainConfiguration(dataset=dataset, 
+                                setting=data_setting, 
+                                model_name=f'{splitting}_{data_setting}_{model_setting}_{cnn_if_2d}_{flag}')
+    model = ModelConfiguration(model_setting=model_setting, 
+                                data_setting=data_setting, 
+                                cnn_if_2d=cnn_if_2d, 
+                                target_names=traincf.target_names).config
 
     model.compile(loss='categorical_crossentropy',
             optimizer='adam',
@@ -618,7 +623,7 @@ def train_model_dl(dataset=None, model_setting=None, splitting=None, data_settin
                                         setting=traincf.setting,
                                         preprocessing_train_stats=train_stats),
                         steps_per_epoch = int(math.ceil(float(len(X_train)) / float(traincf.batch_size))),
-                        epochs=traincf.epochs,
+                        epochs = traincf.epochs,
                         validation_data = valid_generator(X_val, y_val,
                                                             batch_size=traincf.batch_size,
                                                             target_names=traincf.target_names,
@@ -646,12 +651,14 @@ def train_model_dl(dataset=None, model_setting=None, splitting=None, data_settin
                                                     target_names=traincf.target_names,
                                                     preprocessing_train_stats=train_stats),
             steps = int(math.ceil(float(len(X_test)) / float(traincf.batch_size))))
+
+    # CALCULATING METRICS
     bacc = balanced_accuracy_score(np.array(y_test), np.argmax(y_pred, axis=1))
     cm = confusion_matrix(np.array(y_test), np.argmax(y_pred, axis=1))
     test_loss = log_loss(y_test, y_pred)
     clf_report = classification_report(y_test, np.argmax(y_pred, axis=1))
 
-    # Saving results
+    # SAVING TEXT FILE WITH RESULTS
     with open(f'temp_data/{splitting}_{data_setting}_{model_setting}_results.txt', "a+") as resultsfile:
         resultsfile.write(f'\n\n\t\tFOLD #: {flag}\n '
                             f'train_score: {train_score}\n'
@@ -664,7 +671,6 @@ def train_model_dl(dataset=None, model_setting=None, splitting=None, data_settin
                             f'confusion_matrix:\n{cm}\n' 
                             f'classification_report:\n{clf_report}\n')
 
-    import deepdish as dd
     results = h.history
     results['train_score'] = train_score
     results['train_loss'] = train_loss
@@ -676,5 +682,4 @@ def train_model_dl(dataset=None, model_setting=None, splitting=None, data_settin
     results['y_pred'] = y_pred
     results['y_test'] = y_test
     
-    # Save it under the form of a json file
-    dd.io.save(f'temp_data/{splitting}_{data_setting}_{model_setting}_results.h5', {f'results_{flag}': results})
+    return results
