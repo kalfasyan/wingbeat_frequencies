@@ -57,9 +57,9 @@ class ModelConfiguration(object):
 
         if model_setting in ['CONV2D', 'conv2d']:
             self.input_shape = (129, 120, 1)
-        elif model_setting in ['gru','GRU','LSTM','lstm','conv1d','CONV1D']:
+        elif model_setting in ['gru','lstm','conv1d','CONV1D']:
             self.input_shape = (5000, 1)
-        elif model_setting in ['conv1d_psd','CONV1D_psd']:
+        elif model_setting in ['conv1d_psd','CONV1D_psd','gru_psd','lstm_psd']:
             self.input_shape = (129, 1)
         else:
             raise ValueError('Wrong model_setting provided.')
@@ -68,7 +68,7 @@ class ModelConfiguration(object):
             model = current_model(input_tensor = Input(shape = self.input_shape), 
                                 classes = len(target_names), 
                                 weights = None)
-        elif model_setting in ['gru','GRU','LSTM','lstm']:
+        elif model_setting in ['gru','lstm', 'gru_psd', 'lstm_psd']:
             model = Sequential()
             model.add(Conv1D(16, 3, activation='relu', input_shape=self.input_shape))
             model.add(Conv1D(16, 3, activation='relu'))
@@ -89,10 +89,10 @@ class ModelConfiguration(object):
             model.add(Conv1D(256, 3, activation='relu'))
             model.add(BatchNormalization())
             model.add(MaxPooling1D(2))
-            if model_setting == 'gru':
+            if model_setting == 'gru' or model_setting == 'gru_psd':
                 model.add(GRU(units= 128, return_sequences=True))
                 model.add(GRU(units=128, return_sequences=False))
-            if model_setting == 'lstm':
+            if model_setting == 'lstm' or model_setting == 'lstm_psd':
                 model.add(LSTM(units=128, return_sequences=True))
                 model.add(LSTM(units=128, return_sequences=False))
             model.add(Dropout(0.5))
