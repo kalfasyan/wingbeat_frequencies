@@ -14,11 +14,12 @@ np.random.seed(seed=seed)
 splitting = sys.argv[1]
 data_setting = sys.argv[2]
 model_setting = sys.argv[3]
-cnn_if_2d = sys.argv[4]
 
 assert splitting in ['random','randomcv','custom'], "Wrong splitting method given."
 assert data_setting in ['raw','stft','psd_dB'], "Wrong data settting given."
-assert model_setting in ['wavenet','lstm','gru','LSTM','GRU','CONV1D','CONV2D','conv1d','conv2d','conv1d_psd','CONV1D_psd']
+assert model_setting in ['wavenet','lstm','gru','conv1d','conv1d_psd',
+                        'DenseNet121','DenseNet169','DenseNet201',
+                        'InceptionResNetV2','VGG16','VGG19'], "Wrong model setting given"
 
 data = Dataset('Wingbeats')
 print(data.target_classes)
@@ -38,7 +39,6 @@ if splitting in ['random', 'randomcv']:
                         y_val=y_val, 
                         X_test=X_test, 
                         y_test=y_test,
-                        cnn_if_2d=cnn_if_2d,
                         flag='na')
     results[splitting] = res
 elif splitting == 'custom':
@@ -55,8 +55,7 @@ elif splitting == 'custom':
                             y_val=yval, 
                             X_test=X_test, 
                             y_test=y_test,
-                            cnn_if_2d=cnn_if_2d,
-                            flag=f'split_{i}')
+                            flag=f'{i}')
         results[f'{splitting}_{i}'] = res
 
 import deepdish as dd

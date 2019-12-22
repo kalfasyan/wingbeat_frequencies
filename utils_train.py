@@ -18,7 +18,7 @@ import datetime
 n_cpus = multiprocessing.cpu_count()
 
 class ModelConfiguration(object):
-    def __init__(self, model_setting=None, data_setting=None, cnn_if_2d=None, target_names=None):
+    def __init__(self, model_setting=None, data_setting=None, target_names=None):
         from tensorflow.keras.models import Sequential
         from tensorflow.keras.layers import Dense, Dropout, Activation, BatchNormalization,Input, LSTM, GRU
         from tensorflow.keras.layers import Conv1D, GlobalAveragePooling1D, MaxPooling1D
@@ -39,20 +39,22 @@ class ModelConfiguration(object):
         super(ModelConfiguration, self).__init__()
 
         self.model_setting = model_setting
-        self.cnn_if_2d = cnn_if_2d
         self.target_names = target_names
 
-        if cnn_if_2d == 'DenseNet121':
+        self.supported_models = ['DenseNet121','DenseNet169','DenseNet201',
+                        'InceptionResNetV2','VGG16','VGG19']
+
+        if model_setting == 'DenseNet121':
             current_model = DenseNet121
-        elif cnn_if_2d == 'DenseNet169':
+        elif model_setting == 'DenseNet169':
             current_model = DenseNet169
-        elif cnn_if_2d == 'DenseNet201':
+        elif model_setting == 'DenseNet201':
             current_model = DenseNet201
-        elif cnn_if_2d == 'InceptionResNetV2':
+        elif model_setting == 'InceptionResNetV2':
             current_model = InceptionResNetV2
-        elif cnn_if_2d == 'VGG16':
+        elif model_setting == 'VGG16':
             current_model = VGG16
-        elif cnn_if_2d == 'VGG19':
+        elif model_setting == 'VGG19':
             current_model = VGG19
 
         if data_setting == 'stft':
@@ -64,7 +66,7 @@ class ModelConfiguration(object):
         else:
             raise ValueError('Wrong data_setting provided.')
 
-        if model_setting == 'conv2d':
+        if model_setting in self.supported_models:
             model = current_model(input_tensor = Input(shape = self.input_shape), 
                                 classes = len(target_names), 
                                 weights = None)
@@ -595,20 +597,19 @@ def train_model_ml(dataset=None, model_setting=None, splitting=None, data_settin
 
     return estimator
 
-def train_model_dl(dataset=None, model_setting=None, splitting=None, data_setting=None, cnn_if_2d=None,
+def train_model_dl(dataset=None, model_setting=None, splitting=None, data_setting=None,
                 X_train=None, y_train=None,
                 X_val=None, y_val=None,
                 X_test=None, y_test=None, flag=None):
     from sklearn.metrics import confusion_matrix, balanced_accuracy_score, classification_report, make_scorer, log_loss
 
 
-    print(f'processing: {cnn_if_2d}_{flag}')
+    print(f'processing: {model_setting}_{flag}')
     traincf = TrainConfiguration(dataset=dataset, 
                                 setting=data_setting, 
-                                model_name=f'{splitting}_{data_setting}_{model_setting}_{cnn_if_2d}_{flag}')
+                                model_name=f'{splitting}_{data_setting}_{model_setting}_{flag}')
     model = ModelConfiguration(model_setting=model_setting, 
                                 data_setting=data_setting, 
-                                cnn_if_2d=cnn_if_2d, 
                                 target_names=traincf.target_names).config
 
     model.compile(loss='categorical_crossentropy',

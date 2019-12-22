@@ -1,0 +1,12 @@
+#!/bin/bash -l
+#PBS -l walltime=70:00:00
+#PBS -l partition=gpu:nodes=1:ppn=9:gpus=1
+#PBS -A lp_insects
+#PBS -m abe
+#PBS -M ioannis.kalfas@kuleuven.be
+echo 'changing directory'
+cd /data/leuven/314/vsc31431/projects/wingbeat_frequencies/
+conda activate wbtf2
+echo 'activated environment'
+python train_DL.py random raw conv1d && python train_DL.py randomcv raw conv1d && python train_DL.py custom raw conv1d && python train_DL.py random psd_dB conv1d && python train_DL.py randomcv psd_dB conv1d && python train_DL.py custom psd_dB conv1d
+echo 'Done.'
