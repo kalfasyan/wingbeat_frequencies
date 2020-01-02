@@ -555,6 +555,7 @@ def train_model_ml(dataset=None, model_setting=None, splitting=None, data_settin
         raise NotImplementedError('Not implemented yet.')
 
     # Training and reporting cross-validation and test results by saving them to a text file.
+    results = {}
     if splitting in ['random', 'randomcv']:
         cvfolds = 5
         cv_results = cross_validate(estimator, x_train, y_train, cv=cvfolds, 
@@ -575,27 +576,26 @@ def train_model_ml(dataset=None, model_setting=None, splitting=None, data_settin
         mean_train_score = np.mean(cv_results['train_score'])
         mean_val_score = np.mean(cv_results['test_score'])
         mean_test_score = np.mean(b_accs)
+        mean_test_logloss = np.mean(logloss)
 
-        for i in range(cvfolds):
-            with open(f'temp_data/{splitting}_{data_setting}_{model_setting}_{flag}_results.txt', "a+") as resultsfile:
-                if i == 0:
-                    resultsfile.write(f'mean_train_score: {mean_train_score},'
-                                        f'mean_val_score: {mean_val_score},'
-                                        f'mean_test_score: {mean_test_score}\n') 
-                resultsfile.write(f'\n\n\t\tFOLD #: {i}\n '
-                                    f'train_score: {cv_results["train_score"][i]},' 
-                                    f'val_score: {cv_results["test_score"][i]},' 
-                                    f'balanced_accuracy_on_test: {b_accs[i]}\n,' 
-                                    f'log_loss_on_test: {logloss[i]}\n,' 
-                                    f'confusion_matrix:\n{cms[i]}\n' 
-                                    f'classification_report:\n{clf_reports[i]}\n')
+        results['y_preds'] = y_preds
+        results['y_pred_probas'] = y_pred_probas
+        results['cms'] = cms
+        results['b_accs'] = b_accs
+        results['logloss'] = logloss
+        results['clf_reports'] = clf_reports
+        results['train_score'] = mean_train_score
+        results['val_score'] = mean_val_score
+        results['balanced_acc_test'] = mean_test_score
+        results['logloss_test'] = mean_test_logloss
+
     elif splitting == 'custom':
         estimator.fit(x_train,y_train)
         return estimator
     else:
         raise ValueError('Wrong splitting method provided.')
 
-    return estimator
+    return estimator, results
 
 def train_model_dl(dataset=None, model_setting=None, splitting=None, data_setting=None,
                 X_train=None, y_train=None,
@@ -658,19 +658,6 @@ def train_model_dl(dataset=None, model_setting=None, splitting=None, data_settin
     cm = confusion_matrix(np.array(y_test), np.argmax(y_pred, axis=1))
     test_loss = log_loss(y_test, y_pred)
     clf_report = classification_report(y_test, np.argmax(y_pred, axis=1))
-
-    # SAVING TEXT FILE WITH RESULTS
-    with open(f'temp_data/{splitting}_{data_setting}_{model_setting}_results.txt', "a+") as resultsfile:
-        resultsfile.write(f'\n\n\t\tFOLD #: {flag}\n '
-                            f'train_score: {train_score}\n'
-                            f'train_loss: {train_loss}\n' 
-                            f'val_score: {val_score}\n' 
-                            f'val_loss: {val_loss}\n'
-                            f'balanced_accuracy_on_test: {bacc}\n' 
-                            f'log_loss_on_test: {test_loss}\n' 
-                            f'learning_rate: {lr}\n'
-                            f'confusion_matrix:\n{cm}\n' 
-                            f'classification_report:\n{clf_report}\n')
 
     results = h.history
     results['train_score'] = train_score
