@@ -66,8 +66,8 @@ elif splitting == 'custom':
                                     y_test=y_test,
                                     flag=f'split_{i}')
 
-        y_preds[i] = estimator.predict(x_test)
-        y_pred_probas[i] = estimator.predict_proba(x_test)
+        y_preds.append( estimator.predict(x_test) )
+        y_pred_probas.append( estimator.predict_proba(x_test) )
         train_scores.append( balanced_accuracy_score(y_train[i], estimator.predict(x_train_fold)) )
         val_scores.append( balanced_accuracy_score(y_val[i], estimator.predict(x_val_fold)) )
         cms.append(confusion_matrix(y_test, y_preds[i]))
