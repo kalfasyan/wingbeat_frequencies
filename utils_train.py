@@ -370,7 +370,7 @@ def train_test_filenames(dataset, species, train_dates=[], test_dates=[], plot=F
     print("{} train filenames, {} test filenames".format(train_fnames.shape[0], test_fnames.shape[0]))
     return train_fnames, test_fnames
 
-def mosquito_data_split(splitting=None, dataset=None):
+def mosquito_data_split(splitting=None, dataset=None, return_label_encoder=False):
     from sklearn.preprocessing import LabelEncoder
     from sklearn.model_selection import train_test_split
 
@@ -493,7 +493,10 @@ def mosquito_data_split(splitting=None, dataset=None):
                     y_val.append(list(le.fit_transform(val_labels)))
     else:
         raise NotImplementedError('NOT IMPLEMENTED YED')
-    return X_train, X_val, X_test, y_train, y_val, y_test
+    if return_label_encoder:
+        return X_train, X_val, X_test, y_train, y_val, y_test, le
+    else:
+        return X_train, X_val, X_test, y_train, y_val, y_test
 
 def calculate_train_statistics(X_train=None, setting=None):
     from wavhandler import make_df_parallel
