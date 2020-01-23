@@ -15,187 +15,8 @@ from wavhandler import Dataset, BASE_DIR
 import time
 import multiprocessing
 import datetime
+from configs import *
 n_cpus = multiprocessing.cpu_count()
-
-class ModelConfiguration(object):
-    def __init__(self, model_setting=None, data_setting=None, target_names=None):
-        from tensorflow.keras.models import Sequential
-        from tensorflow.keras.layers import Dense, Dropout, Activation, BatchNormalization,Input, LSTM, GRU
-        from tensorflow.keras.layers import Conv1D, GlobalAveragePooling1D, MaxPooling1D
-        from tensorflow.keras.optimizers import SGD
-        from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping, ReduceLROnPlateau, CSVLogger
-        from tensorflow.keras.utils import to_categorical
-        from tensorflow.keras.regularizers import l2
-        # MODELS
-        from tensorflow.keras.applications.densenet import DenseNet121, DenseNet169, DenseNet201
-        from tensorflow.keras.applications.inception_resnet_v2 import InceptionResNetV2
-        from tensorflow.keras.applications.inception_v3 import InceptionV3
-        from tensorflow.keras.applications.mobilenet import MobileNet
-        from tensorflow.keras.applications.nasnet import NASNetLarge, NASNetMobile
-        from tensorflow.keras.applications.vgg16 import VGG16
-        from tensorflow.keras.applications.vgg19 import VGG19
-        from tensorflow.keras.applications.xception import Xception
-
-        super(ModelConfiguration, self).__init__()
-
-        self.model_setting = model_setting
-        self.target_names = target_names
-
-        self.supported_models = ['DenseNet121','DenseNet169','DenseNet201',
-                        'InceptionResNetV2','VGG16','VGG19']
-
-        if model_setting == 'DenseNet121':
-            current_model = DenseNet121
-        elif model_setting == 'DenseNet169':
-            current_model = DenseNet169
-        elif model_setting == 'DenseNet201':
-            current_model = DenseNet201
-        elif model_setting == 'InceptionResNetV2':
-            current_model = InceptionResNetV2
-        elif model_setting == 'VGG16':
-            current_model = VGG16
-        elif model_setting == 'VGG19':
-            current_model = VGG19
-
-        if data_setting == 'stft':
-            self.input_shape = (129, 120, 1)
-        elif data_setting == 'raw':
-            self.input_shape = (5000, 1)
-        elif data_setting == 'psd_dB':
-            self.input_shape = (129, 1)
-        else:
-            raise ValueError('Wrong data_setting provided.')
-
-        if model_setting in self.supported_models:
-            model = current_model(input_tensor = Input(shape = self.input_shape), 
-                                classes = len(target_names), 
-                                weights = None)
-        elif model_setting in ['gru','lstm']:
-            model = Sequential()
-            model.add(Conv1D(16, 3, activation='relu', input_shape=self.input_shape))
-            model.add(Conv1D(16, 3, activation='relu'))
-            model.add(BatchNormalization())
-            model.add(Conv1D(32, 3, activation='relu'))
-            model.add(Conv1D(32, 3, activation='relu'))
-            model.add(BatchNormalization())
-            model.add(MaxPooling1D(2))
-            model.add(Conv1D(64, 3, activation='relu'))
-            model.add(Conv1D(64, 3, activation='relu'))
-            model.add(BatchNormalization())
-            model.add(MaxPooling1D(2))
-            model.add(Conv1D(128, 3, activation='relu'))
-            model.add(Conv1D(128, 3, activation='relu'))
-            model.add(BatchNormalization())
-            model.add(MaxPooling1D(2))
-            model.add(Conv1D(256, 3, activation='relu'))
-            model.add(Conv1D(256, 3, activation='relu'))
-            model.add(BatchNormalization())
-            model.add(MaxPooling1D(2))
-            if model_setting == 'gru' or model_setting == 'gru_psd':
-                model.add(GRU(units= 128, return_sequences=True))
-                model.add(GRU(units=128, return_sequences=False))
-            if model_setting == 'lstm' or model_setting == 'lstm_psd':
-                model.add(LSTM(units=128, return_sequences=True))
-                model.add(LSTM(units=128, return_sequences=False))
-            model.add(Dropout(0.5))
-            model.add(Dense(len(target_names), activation='softmax'))
-        elif model_setting == 'wavenet':
-            model=Sequential()
-            model.add(Conv1D(16, 3, activation='relu', input_shape=self.input_shape))
-            for rate in (1,2,4,8)*2:
-                model.add(Conv1D(filters=16*rate,
-                                            kernel_size=3,
-                                            padding="causal",
-                                            activation="relu",
-                                            dilation_rate=rate))
-                model.add(Conv1D(filters=16*rate,
-                                            kernel_size=3,
-                                            padding="causal",
-                                            activation="relu",
-                                            dilation_rate=rate))
-                model.add(BatchNormalization())
-            model.add(MaxPooling1D(2))
-            model.add(Conv1D(128, 2, activation='relu'))
-            model.add(Conv1D(128, 2, activation='relu'))
-            model.add(BatchNormalization())
-            model.add(MaxPooling1D(2))
-            model.add(Conv1D(256, 2, activation='relu'))
-            model.add(Conv1D(256, 2, activation='relu'))
-            model.add(BatchNormalization())
-            model.add(GlobalAveragePooling1D())
-            model.add(Dropout(0.5))
-            model.add(Dense(len(target_names), activation='softmax'))
-        elif model_setting == 'conv1d':
-            model = Sequential()
-            model.add(Conv1D(16, 3, activation='relu', input_shape=self.input_shape))
-            model.add(Conv1D(16, 3, activation='relu'))
-            model.add(BatchNormalization())
-            model.add(Conv1D(32, 3, activation='relu'))
-            model.add(Conv1D(32, 3, activation='relu'))
-            model.add(BatchNormalization())
-            model.add(MaxPooling1D(2))
-            model.add(Conv1D(64, 3, activation='relu'))
-            model.add(Conv1D(64, 3, activation='relu'))
-            model.add(BatchNormalization())
-            model.add(MaxPooling1D(2))
-            model.add(Conv1D(128, 3, activation='relu'))
-            model.add(Conv1D(128, 3, activation='relu'))
-            model.add(BatchNormalization())
-            model.add(MaxPooling1D(2))
-            model.add(Conv1D(256, 3, activation='relu'))
-            model.add(Conv1D(256, 3, activation='relu'))
-            model.add(BatchNormalization())
-            model.add(GlobalAveragePooling1D())
-            model.add(Dropout(0.5))
-            model.add(Dense(len(target_names), activation='softmax'))
-        else:
-            raise ValueError("Wrong model setting given.")
-
-        self.config = model
-
-class TrainConfiguration(object):
-    """ Configuration for training procedures. Contains all settings """
-    def __init__(self, dataset=None, setting='raw', model_name='test', batch_size=32, monitor='val_loss', 
-                es_patience=7, rlr_patience=3, epochs=100):
-        from tensorflow.keras.models import Sequential
-        from tensorflow.keras.layers import Dense, Dropout, Activation
-        from tensorflow.keras.layers import Conv1D, GlobalAveragePooling1D, MaxPooling1D
-        from tensorflow.keras.optimizers import SGD
-        from tensorflow.keras.layers import BatchNormalization
-        from sklearn.model_selection import train_test_split
-        from tensorflow.keras.callbacks import ModelCheckpoint, TensorBoard, EarlyStopping, ReduceLROnPlateau, CSVLogger
-        from tensorflow.keras.utils import to_categorical
-        from tensorflow.keras import utils
-
-        super(TrainConfiguration, self).__init__()
-
-        self.setting = setting
-        self.model_name = model_name
-        self.top_weights_path = TEMP_DATADIR + str(self.model_name) + '.h5'
-        self.logfile = TEMP_DATADIR + str(self.model_name) + '.log'
-        self.log_dir = f"{TEMP_DATADIR}/logs/fit/{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}"
-        self.batch_size = batch_size
-        self.monitor = monitor
-        self.es_patience = es_patience
-        self.rlr_patience = rlr_patience
-        self.epochs = epochs
-        self.target_names = np.unique(dataset.target_classes)
-        self.targets = len(self.target_names)
-        self.callbacks_list = [ModelCheckpoint(monitor = self.monitor,
-                                    filepath = self.top_weights_path,
-                                    save_best_only = True,
-                                    save_weights_only = False,
-                                    verbose = 1),
-                                EarlyStopping(monitor = self.monitor,
-                                            patience = self.es_patience,
-                                            verbose = 1),
-                                ReduceLROnPlateau(monitor = self.monitor,
-                                            factor = 0.1,
-                                            patience = self.rlr_patience,
-                                            verbose = 1),
-                                # CSVLogger(filename = self.logfile),
-                                TensorBoard(log_dir=self.log_dir, histogram_freq=1, profile_batch=0)]
-
 
 def shift(x, wshift, hshift, row_axis = 0, col_axis = 1, channel_axis = 2, fill_mode = 'constant', cval = 0.):
     h, w = x.shape[row_axis], x.shape[col_axis]
@@ -220,7 +41,7 @@ def random_data_shift_simple(data, u, shift_pct=0.006, axis=0):
         data = np.roll(data, int(round(np.random.uniform(-(len(data)*shift_pct), (len(data)*shift_pct)))), axis=axis)
     return data
 
-def train_generator(X_train, y_train, batch_size, target_names, setting='stft', preprocessing_train_stats=None):
+def train_generator(X_train, y_train, batch_size, target_names, setting='stft', preprocessing_train_stats=None, using_conv2d=False):
     from tensorflow.keras import utils
 
     obj = create_settings_obj(setting)
@@ -249,6 +70,9 @@ def train_generator(X_train, y_train, batch_size, target_names, setting='stft', 
                 data = data - train_mean
                 # Expand dimensions
                 data = np.expand_dims(data, axis = -1)
+                if using_conv2d:
+                    data = np.expand_dims(data, axis = -1)
+                
 
                 x_batch.append(data)
                 y_batch.append(labels_batch[i])
@@ -259,7 +83,7 @@ def train_generator(X_train, y_train, batch_size, target_names, setting='stft', 
             
             yield x_batch, y_batch
 
-def valid_generator(X_val, y_val, batch_size, target_names, setting='stft', preprocessing_train_stats=None):
+def valid_generator(X_val, y_val, batch_size, target_names, setting='stft', preprocessing_train_stats=None, using_conv2d=False):
     from tensorflow.keras import utils
 
     train_mean = preprocessing_train_stats.mean.squeeze() 
@@ -283,6 +107,8 @@ def valid_generator(X_val, y_val, batch_size, target_names, setting='stft', prep
                 data = data - train_mean
                 # Expand dimensions
                 data = np.expand_dims(data, axis = -1)
+                if using_conv2d:
+                    data = np.expand_dims(data, axis = -1)
 
                 x_batch.append(data)
                 y_batch.append(labels_batch[i])
@@ -370,14 +196,15 @@ def train_test_filenames(dataset, species, train_dates=[], test_dates=[], plot=F
     print("{} train filenames, {} test filenames".format(train_fnames.shape[0], test_fnames.shape[0]))
     return train_fnames, test_fnames
 
-def mosquito_data_split(splitting=None, dataset=None, return_label_encoder=False):
+def mosquito_data_split(splitting=None, dataset=None, return_label_encoder=False, downsampling=True):
     from sklearn.preprocessing import LabelEncoder
     from sklearn.model_selection import train_test_split
 
     assert splitting in ['random','randomcv','custom'], 'Wrong splitting argument passed.'
-    # assert isinstance(data, Dataset), 'Pass a wavhandler.Dataset as data.'
 
+    # RANDOM SPLITTING
     if splitting == 'random':
+        if downsampling:
             dataset.read('Ae. aegypti', loadmat=False)
             x1 = dataset.filenames.sample(14800, random_state=seed)
             dataset.read('Ae. albopictus', loadmat=False)
@@ -390,32 +217,43 @@ def mosquito_data_split(splitting=None, dataset=None, return_label_encoder=False
             x5 = dataset.filenames.sample(14800, random_state=seed)
             dataset.read('C. quinquefasciatus', loadmat=False)
             x6 = dataset.filenames.sample(14800, random_state=seed)
+        else:
+            dataset.read('Ae. aegypti', loadmat=False)
+            x1 = dataset.filenames
+            dataset.read('Ae. albopictus', loadmat=False)
+            x2 = dataset.filenames
+            dataset.read('An. arabiensis', loadmat=False)
+            x3 = dataset.filenames
+            dataset.read('An. gambiae', loadmat=False)
+            x4 = dataset.filenames
+            dataset.read('C. pipiens', loadmat=False)
+            x5 = dataset.filenames
+            dataset.read('C. quinquefasciatus', loadmat=False)
+            x6 = dataset.filenames
 
-            X = pd.concat([x1, x2, x3, x4, x5, x6], axis=0)
-            y = X.apply(lambda x: x.split('/')[dataset.class_path_idx])
+        X = pd.concat([x1, x2, x3, x4, x5, x6], axis=0)
+        y = X.apply(lambda x: x.split('/')[dataset.class_path_idx])
 
-            le = LabelEncoder()
-            y = le.fit_transform(y.copy())
+        le = LabelEncoder()
+        y = le.fit_transform(y.copy())
 
-            X,y = shuffle(X.tolist(),y.tolist(), random_state=seed)
-            X_train, X_test, X_val, y_train, y_test, y_val = train_test_val_split(X,y,test_size=0.13514, val_size=0.2)
+        X,y = shuffle(X.tolist(),y.tolist(), random_state=seed)
+        X_train, X_test, X_val, y_train, y_test, y_val = train_test_val_split(X,y,test_size=0.13514, val_size=0.2)
+
+    # RANDOMCV AND CUSTOM SPLITTING
     elif splitting in ['randomcv', 'custom']:
-            # ### Ae. Aegypti
-            x1_tr, x1_ts = train_test_filenames(dataset,'Ae. aegypti', test_dates=['20161213','20161212'])
-            # ### Ae. albopictus
-            x2_tr, x2_ts = train_test_filenames(dataset,'Ae. albopictus', test_dates=['20170103', '20170102'])
-            # ### An. arabiensis
-            x3_tr, x3_ts = train_test_filenames(dataset,'An. arabiensis', test_dates=['20170319','20170320',
-                                                                                    '20170318','20170317'], 
-                                                                        train_dates=['20170201','20170202', '20170203','20170204',
-                                                                                    '20170205','20170206','20170131','20170130'])
-            # ### An. gambiae
-            x4_tr, x4_ts = train_test_filenames(dataset,'An. gambiae', test_dates=['20170110', '20170109']) 
-            # ### Culex quinquefasciatus
-            x5_tr, x5_ts = train_test_filenames(dataset,'C. quinquefasciatus', test_dates=['20161219']) 
-            # ### Culex pipiens
-            x6_tr, x6_ts = train_test_filenames(dataset,'C. pipiens', test_dates=['20161206', '20161205']) 
+        # Selecting filenames (downsampling or not)
+        x1_tr, x1_ts = train_test_filenames(dataset,'Ae. aegypti', test_dates=['20161213','20161212'])
+        x2_tr, x2_ts = train_test_filenames(dataset,'Ae. albopictus', test_dates=['20170103', '20170102'])
+        x3_tr, x3_ts = train_test_filenames(dataset,'An. arabiensis', test_dates=['20170319','20170320',
+                                                                                '20170318','20170317'], 
+                                                                    train_dates=['20170201','20170202', '20170203','20170204',
+                                                                                '20170205','20170206','20170131','20170130'])
+        x4_tr, x4_ts = train_test_filenames(dataset,'An. gambiae', test_dates=['20170110', '20170109']) 
+        x5_tr, x5_ts = train_test_filenames(dataset,'C. quinquefasciatus', test_dates=['20161219']) 
+        x6_tr, x6_ts = train_test_filenames(dataset,'C. pipiens', test_dates=['20161206', '20161205']) 
 
+        if downsampling:
             x1_tr, x1_ts = x1_tr.sample(12800, random_state=seed), x1_ts.sample(2000, random_state=seed)
             x2_tr, x2_ts = x2_tr.sample(12800, random_state=seed), x2_ts.sample(2000, random_state=seed)
             x3_tr, x3_ts = x3_tr.sample(12800, random_state=seed), x3_ts.sample(2000, random_state=seed)
@@ -423,74 +261,76 @@ def mosquito_data_split(splitting=None, dataset=None, return_label_encoder=False
             x5_tr, x5_ts = x5_tr.sample(12800, random_state=seed), x5_ts.sample(2000, random_state=seed)
             x6_tr, x6_ts = x6_tr.sample(12800, random_state=seed), x6_ts.sample(2000, random_state=seed)
 
-            # ## Creating TRAIN/VAL/TEST sets
-            X_train = pd.concat([x1_tr, x2_tr, x3_tr, x4_tr, x5_tr, x6_tr], axis=0)
-            X_test = pd.concat([x1_ts, x2_ts, x3_ts, x4_ts, x5_ts, x6_ts], axis=0)
+        # Concatenating selections for TRAIN/VAL/TEST
+        X_train = pd.concat([x1_tr, x2_tr, x3_tr, x4_tr, x5_tr, x6_tr], axis=0)
+        X_test = pd.concat([x1_ts, x2_ts, x3_ts, x4_ts, x5_ts, x6_ts], axis=0)
+        ## Extracting labels from the filenames
+        y_train = X_train.apply(lambda x: x.split('/')[dataset.class_path_idx])
+        y_test = X_test.apply(lambda x: x.split('/')[dataset.class_path_idx])
+        ## Encoding labels
+        le = LabelEncoder() 
+        y_train = le.fit_transform(y_train)
+        y_test = le.fit_transform(y_test)
 
-            y_train = X_train.apply(lambda x: x.split('/')[dataset.class_path_idx])
-            y_test = X_test.apply(lambda x: x.split('/')[dataset.class_path_idx])
+        X_test = X_test.tolist()
 
-            le = LabelEncoder()
-            y_train = le.fit_transform(y_train)
-            y_test = le.fit_transform(y_test)
+        # MAKING SPLITS FOR RANDOMCV
+        if splitting == 'randomcv':
+            X_train,y_train = shuffle(X_train.tolist(),y_train.tolist(), random_state=seed)
+            X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size=0.2, random_state=seed)
+        # MAKING SPLITS FOR CUSTOM
+        elif splitting == 'custom':
+            import itertools
+            from sklearn.model_selection import LeaveOneGroupOut
 
-            X_test = X_test.tolist()
+            # Creating DataFrame to sort data by date
+            df = pd.DataFrame(X_train, columns=['filenames'])
+            df['class'] = df['filenames'].apply(lambda x: x.split('/')[dataset.class_path_idx])
+            df['wavnames'] = df['filenames'].apply(lambda x: x.split('/')[-1][:-4])
+            df['date'] = df['wavnames'].apply(lambda x: pd.to_datetime(''.join(x.split('_')[0:2]),format='F%y%m%d%H%M%S'))
+            df.sort_values(by='date', inplace=True)
 
-            if splitting == 'randomcv':
-                X_train,y_train = shuffle(X_train.tolist(),y_train.tolist(), random_state=seed)
-                X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size=0.2, random_state=seed)
-            elif splitting == 'custom':
-                import itertools
-                from sklearn.model_selection import LeaveOneGroupOut
+            # For each mosquito we divide its data in 5 chunks
+            classes = df['class'].unique().tolist()
+            n_chunks = 5 # also number of folds
+            class_chunks = {} # this is a dict with class as index and 5 lists in each class, 1 for each chunk
+            for cl, sub in df.groupby('class'):
+                sub.reset_index(drop=True, inplace=True) # resetting index to have values from 1....sub.shape[0]
+                lst = list(range(0,sub.shape[0])) # this is basically the index
+                n = int(sub.shape[0] / n_chunks) # number of items in each chunk
+                inds_chunk = [np.array(lst[i:i + n]) for i in range(0, len(lst), n)] # splitting the index numbers (lst) in 5 chunks
+                class_chunks[cl] = [sub.iloc[inds_chunk[j]]['filenames'].tolist() for j in range(len(inds_chunk))] 
 
-                # Creating DataFrame to sort data by date
-                df = pd.DataFrame(X_train, columns=['filenames'])
-                df['class'] = df['filenames'].apply(lambda x: x.split('/')[dataset.class_path_idx])
-                df['wavnames'] = df['filenames'].apply(lambda x: x.split('/')[-1][:-4])
-                df['date'] = df['wavnames'].apply(lambda x: pd.to_datetime(''.join(x.split('_')[0:2]),format='F%y%m%d%H%M%S'))
-                df.sort_values(by='date', inplace=True)
+            # Now creating the actual folds for Cross validation 
+            X_folds = {}
+            y_folds = {}
+            # For each fold, we add the corresponding chunks of each mosquito
+            # This means that in FOLD-0 we will have the first chunk of each mosquito
+            # in FOLD-1 we will have the second chunk of each mosquito etc..
+            for i in range(n_chunks): 
+                X_folds[i] = [] # creating a list in which to add data of each mosquito
+                for c in classes: 
+                    X_folds[i].extend(class_chunks[c][i]) # adding each mosquito chunk data in the list
+                y_folds[i] = pd.Series(X_folds[i]).apply(lambda x: x.split('/')[dataset.class_path_idx]).tolist() # targets
 
-                # For each mosquito we divide its data in 5 chunks
-                classes = df['class'].unique().tolist()
-                n_chunks = 5 # also number of folds
-                class_chunks = {} # this is a dict with class as index and 5 lists in each class, 1 for each chunk
-                for cl, sub in df.groupby('class'):
-                    sub.reset_index(drop=True, inplace=True) # resetting index to have values from 1....sub.shape[0]
-                    lst = list(range(0,sub.shape[0])) # this is basically the index
-                    n = int(sub.shape[0] / n_chunks) # number of items in each chunk
-                    inds_chunk = [np.array(lst[i:i + n]) for i in range(0, len(lst), n)] # splitting the index numbers (lst) in 5 chunks
-                    class_chunks[cl] = [sub.iloc[inds_chunk[j]]['filenames'].tolist() for j in range(len(inds_chunk))] 
+            # Creating groups to use the LeaveOneGroupOut of sklearn for combining
+            # our X_folds so that 4 of them become train and 1 becomes val each time.
+            groups = np.array(range(len(X_folds)))
 
-                # Now creating the actual folds for Cross validation 
-                X_folds = {}
-                y_folds = {}
-                # For each fold, we add the corresponding chunks of each mosquito
-                # This means that in FOLD-0 we will have the first chunk of each mosquito
-                # in FOLD-1 we will have the second chunk of each mosquito etc..
-                for i in range(n_chunks): 
-                    X_folds[i] = [] # creating a list in which to add data of each mosquito
-                    for c in classes: 
-                        X_folds[i].extend(class_chunks[c][i]) # adding each mosquito chunk data in the list
-                    y_folds[i] = pd.Series(X_folds[i]).apply(lambda x: x.split('/')[dataset.class_path_idx]).tolist() # targets
+            logo = LeaveOneGroupOut()
+            X_train, X_val, y_train, y_val = [], [], [], []
+            for train_index, val_index in logo.split(X_folds, y_folds, groups):
+                train_groups = [X_folds.get(key) for key in train_index]
+                train_groups_untd = pd.Series(list(itertools.chain.from_iterable(train_groups)))
 
-                # Creating groups to use the LeaveOneGroupOut of sklearn for combining
-                # our X_folds so that 4 of them become train and 1 becomes val each time.
-                groups = np.array(range(len(X_folds)))
-
-                logo = LeaveOneGroupOut()
-                X_train, X_val, y_train, y_val = [], [], [], []
-                for train_index, val_index in logo.split(X_folds, y_folds, groups):
-                    train_groups = [X_folds.get(key) for key in train_index]
-                    train_groups_untd = pd.Series(list(itertools.chain.from_iterable(train_groups)))
-
-                    X_train.append(train_groups_untd.tolist())
-                    train_labels = train_groups_untd.apply(lambda x: x.split('/')[dataset.class_path_idx]).tolist()
-                    y_train.append(list(le.fit_transform(train_labels)))
-                    
-                    val_group = pd.Series(X_folds[val_index[0]])
-                    X_val.append(val_group.tolist())
-                    val_labels = val_group.apply(lambda x: x.split('/')[dataset.class_path_idx]).tolist()
-                    y_val.append(list(le.fit_transform(val_labels)))
+                X_train.append(train_groups_untd.tolist())
+                train_labels = train_groups_untd.apply(lambda x: x.split('/')[dataset.class_path_idx]).tolist()
+                y_train.append(list(le.fit_transform(train_labels)))
+                
+                val_group = pd.Series(X_folds[val_index[0]])
+                X_val.append(val_group.tolist())
+                val_labels = val_group.apply(lambda x: x.split('/')[dataset.class_path_idx]).tolist()
+                y_val.append(list(le.fit_transform(val_labels)))
     else:
         raise NotImplementedError('NOT IMPLEMENTED YED')
     if return_label_encoder:
@@ -527,7 +367,7 @@ def train_model_ml(dataset=None, model_setting=None, splitting=None, data_settin
                     x_test=None, y_test=None, flag=None):
     """
     Used to train ML models on wingbeat data, depending on the splitting method chosen (random/randomcv or custom).
-    Models used so far: KNeighborsClassifier, RandomForestClassifier, XGBXClassifier
+    Models used so far: KNeighborsClassifier, RandomForestClassifier, XGBClassifier
     """
     from sklearn.neighbors import KNeighborsClassifier
     from sklearn.ensemble import RandomForestClassifier
@@ -537,7 +377,7 @@ def train_model_ml(dataset=None, model_setting=None, splitting=None, data_settin
     from joblib import dump, load
     from sklearn.metrics import confusion_matrix, balanced_accuracy_score, classification_report, make_scorer, log_loss
 
-    # Defining the chosen estimator
+    # DEFINING CHOSEN ESTIMATOR
     if model_setting.startswith('knn'):
         estimator = KNeighborsClassifier(n_neighbors=11, weights='uniform',metric='manhattan', n_jobs=min(8,n_cpus))
     elif model_setting.startswith('randomforest'):
@@ -557,7 +397,7 @@ def train_model_ml(dataset=None, model_setting=None, splitting=None, data_settin
     else:
         raise NotImplementedError('Not implemented yet.')
 
-    # Training and reporting cross-validation and test results by saving them to a text file.
+    # CROSS VALIDATION TRAINING FOR RANDOM/RANDOMCV
     results = {}
     if splitting in ['random', 'randomcv']:
         cvfolds = 5
@@ -568,6 +408,7 @@ def train_model_ml(dataset=None, model_setting=None, splitting=None, data_settin
                                     verbose=1, 
                                     n_jobs=min(8, n_cpus)) 
 
+        # CREATING RESULTS
         y_preds = [cv_results['estimator'][i].predict(x_test) for i in range(cvfolds)]
         y_pred_probas = [cv_results['estimator'][i].predict_proba(x_test) for i in range(cvfolds)]
 
@@ -592,6 +433,7 @@ def train_model_ml(dataset=None, model_setting=None, splitting=None, data_settin
         results['balanced_acc_test'] = mean_test_score
         results['logloss_test'] = mean_test_logloss
 
+    # CROSS VALIDATION TRAINING FOR CUSTOM IS PERFORMED IN MAIN SCRIPT IN A LOOP
     elif splitting == 'custom':
         estimator.fit(x_train,y_train)
         return estimator
@@ -606,18 +448,16 @@ def train_model_dl(dataset=None, model_setting=None, splitting=None, data_settin
                 X_test=None, y_test=None, flag=None):
     from sklearn.metrics import confusion_matrix, balanced_accuracy_score, classification_report, make_scorer, log_loss
 
+    if model_setting.endswith('baseline'):
+        using_conv2d = True
+    else:
+        using_conv2d = False
 
-    print(f'processing: {model_setting}_{flag}')
-    traincf = TrainConfiguration(dataset=dataset, 
-                                setting=data_setting, 
-                                model_name=f'{splitting}_{data_setting}_{model_setting}_{flag}')
-    model = ModelConfiguration(model_setting=model_setting, 
-                                data_setting=data_setting, 
-                                target_names=traincf.target_names).config
+    traincf = TrainConfiguration(dataset=dataset, setting=data_setting, model_name=f'{splitting}_{data_setting}_{model_setting}_{flag}')
 
-    model.compile(loss='categorical_crossentropy',
-            optimizer='adam',
-            metrics=['accuracy'])
+    model = ModelConfiguration(model_setting=model_setting, data_setting=data_setting, target_names=traincf.target_names).config
+
+    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
 
     train_stats = calculate_train_statistics(X_train=X_train, setting=data_setting)
     # Actual training
@@ -625,14 +465,16 @@ def train_model_dl(dataset=None, model_setting=None, splitting=None, data_settin
                                         batch_size=traincf.batch_size,
                                         target_names=traincf.target_names,
                                         setting=traincf.setting,
-                                        preprocessing_train_stats=train_stats),
+                                        preprocessing_train_stats=train_stats,
+                                        using_conv2d=using_conv2d),
                         steps_per_epoch = int(math.ceil(float(len(X_train)) / float(traincf.batch_size))),
                         epochs = traincf.epochs,
                         validation_data = valid_generator(X_val, y_val,
                                                             batch_size=traincf.batch_size,
                                                             target_names=traincf.target_names,
                                                             setting=traincf.setting,
-                                                            preprocessing_train_stats=train_stats),
+                                                            preprocessing_train_stats=train_stats,
+                                                            using_conv2d=using_conv2d),
                         validation_steps=int(math.ceil(float(len(X_test))/float(traincf.batch_size))),
                         callbacks=traincf.callbacks_list,
                         use_multiprocessing=False,
@@ -654,13 +496,12 @@ def train_model_dl(dataset=None, model_setting=None, splitting=None, data_settin
                                                     setting=traincf.setting, 
                                                     target_names=traincf.target_names,
                                                     preprocessing_train_stats=train_stats),
+                                                    using_conv2d=using_conv2d,
             steps = int(math.ceil(float(len(X_test)) / float(traincf.batch_size))))
 
     # CALCULATING METRICS
     bacc = balanced_accuracy_score(np.array(y_test), np.argmax(y_pred, axis=1))
-    cm = confusion_matrix(np.array(y_test), np.argmax(y_pred, axis=1))
     test_loss = log_loss(y_test, y_pred)
-    clf_report = classification_report(y_test, np.argmax(y_pred, axis=1))
 
     results = h.history
     results['train_score'] = train_score
