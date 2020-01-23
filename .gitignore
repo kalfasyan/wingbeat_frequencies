@@ -110,3 +110,4 @@ venv.bak/
 /temp_data
 /supervised/deprecated
 Jupyter_Notebooks/temp_data/
+.vscode/settings.json
