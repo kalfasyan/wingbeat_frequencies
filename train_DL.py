@@ -22,7 +22,7 @@ assert model_setting in ['wavenet','lstm','gru','conv1d','conv1d_psd',
                         'DenseNet121','DenseNet169','DenseNet201',
                         'InceptionResNetV2','VGG16','VGG19',
                         'dl4tsc_fcn','dl4tsc_res', 'tsc_res_baseline',
-                        'tsc_fcn_baseline', 'conv1d_baseline'], "Wrong model setting given"
+                        'tsc_fcn_baseline', 'conv1d_baseline', 'dl4tsc_inc'], "Wrong model setting given"
 
 data = Dataset('Wingbeats')
 print(data.target_classes)

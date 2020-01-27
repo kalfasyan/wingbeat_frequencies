@@ -495,8 +495,8 @@ def train_model_dl(dataset=None, model_setting=None, splitting=None, data_settin
                                                     batch_size=traincf.batch_size, 
                                                     setting=traincf.setting, 
                                                     target_names=traincf.target_names,
-                                                    preprocessing_train_stats=train_stats),
-                                                    using_conv2d=using_conv2d,
+                                                    preprocessing_train_stats=train_stats,
+                                                    using_conv2d=using_conv2d),
             steps = int(math.ceil(float(len(X_test)) / float(traincf.batch_size))))
 
     # CALCULATING METRICS
