@@ -3,18 +3,11 @@ import pandas as pd
 import numpy as np
 seed = 42
 np.random.seed(seed)
-import librosa
-import cv2
+import librosa, cv2, pywt, math, logging, warnings, time, multiprocessing, datetime
 from scipy import signal
 from sklearn.utils import shuffle
-import warnings
-import logging
-import math
 from utils import crop_rec, TEMP_DATADIR
 from wavhandler import Dataset, BASE_DIR
-import time
-import multiprocessing
-import datetime
 from configs import *
 n_cpus = multiprocessing.cpu_count()
 
@@ -135,10 +128,13 @@ def metamorphose(data, setting='stft', stg_obj=None, img_sz=150):
             data = librosa.amplitude_to_db(data)
         data = np.flipud(data)
     elif setting == 'raw':
-        return data
+        pass
     elif setting == 'psd_dB':
         data = 10*np.log10(signal.welch(data, fs=F_S, window='hanning', nperseg=256, noverlap=128+64)[1])
-        return data
+    elif setting == 'cwt':
+        coeff, _ = pywt.cwt(data, range(1,128), 'morl', 1)
+        data = coeff[:,:127]
+        data = np.flipud(data).astype(float)
     # elif setting=='gasf':
     #     data = stg_obj.fit_transform(data.reshape(1,-1)).squeeze()
     # elif setting=='gadf':
@@ -154,7 +150,7 @@ def metamorphose(data, setting='stft', stg_obj=None, img_sz=150):
 
 def create_settings_obj(setting='gasf', img_sz=150):
     # from pyts.image import GramianAngularField, RecurrencePlot, MarkovTransitionField
-    if setting == 'stft' or setting == 'melspec' or setting == 'raw' or setting == 'psd_dB':
+    if setting == 'stft' or setting == 'melspec' or setting == 'raw' or setting == 'psd_dB' or setting == 'cwt':
         obj = None
     # elif setting == 'gasf':
     #     obj = GramianAngularField(image_size=img_sz, method='summation')
@@ -353,6 +349,8 @@ def calculate_train_statistics(X_train=None, setting=None):
         train_matrix = train_matrix.reshape((len(X_train),5000,1))
     elif setting == 'psd_dB':
         train_matrix = train_matrix.reshape((len(X_train),129,1))
+    elif setting == 'cwt':
+        train_matrix = train_matrix.reshape((len(X_train),127,127,1))
     else:
         raise ValueError('Wrong setting provided.')
 
