@@ -155,6 +155,7 @@ class ModelConfiguration(object):
             filters = 32
             depth = 7
             kernel_size = 14
+            print(TEMP_DATADIR)
             clf = Classifier_INCEPTION(TEMP_DATADIR, self.input_shape, self.nb_classes,
                                     nb_filters=filters, use_residual=True,
                                     use_bottleneck=True, depth=depth,

@@ -259,12 +259,16 @@ class Dataset(object):
         df = df[df['freqs'] < 450]
         np_hist(df,'freqs')
         
-    def plot_activity_times(self):
+    def plot_activity_times(self, species=None):
         """
         Plots the activity times of all data in the Dataset. Useful when selecting specific species.
         """
         import matplotlib.pyplot as plt
-        df = pd.DataFrame(self.filenames.apply(lambda x: get_wingbeat_timestamp(x)).value_counts())
+        if species in self.target_classes:
+            sub = self.filenames[self.y == species]
+        else:
+            sub = self.filenames
+        df = pd.DataFrame(sub.apply(lambda x: get_wingbeat_timestamp(x).hour).value_counts())
         df['counts'] = df[0]
         df['ind'] = df.index
         df.counts.sort_index().plot(kind='bar', figsize=(14,10))
