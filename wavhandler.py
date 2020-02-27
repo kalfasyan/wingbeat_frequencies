@@ -386,6 +386,15 @@ def transform_data_parallel_spectograms(path):
     x = np.flipud(x).flatten()
     return pd.Series(x)
 
+def transform_data_parallel_cwt(path):
+    import pywt
+    x, _ = read_simple([path])
+    x = x.ravel()
+    coeff, _ = pywt.cwt(x, range(1,128), 'morl', 1)
+    x = coeff[:,:127]
+    x = np.flipud(x).flatten()
+    return pd.Series(x)
+
 def power_spectral_density_parallel(path):
     X, _ = read_simple([path])
     fname = path.split('/')[-1][:-4]
@@ -418,6 +427,8 @@ def make_df_parallel(setting=None, names=None):
         result_list.append(pool.map(transform_data_parallel, names))
     elif setting == 'melbank':
         result_list.append(pool.map(transform_data_parallel_melbank, names))
+    elif setting == 'cwt':
+        result_list.append(pool.map(transform_data_parallel_cwt, names))
     else:
         logging.error('Wrong setting!')
     pool.close()

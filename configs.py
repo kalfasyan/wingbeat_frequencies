@@ -60,6 +60,8 @@ class ModelConfiguration(object):
                 self.input_shape = (5000,1,1)
         elif data_setting == 'psd_dB':
             self.input_shape = (129, 1)
+        elif data_setting == 'cwt':
+            self.input_shape = (127, 127, 1)
         else:
             raise ValueError('Wrong data_setting provided.')
 
