@@ -1,9 +1,14 @@
 import pandas as pd
 import numpy as np
+seed = 42
 np.random.seed(42)
 from scipy import signal
 import logging
 import os
+import git
+
+repo = git.Repo('.', search_parent_directories=True)
+TEMP_DATADIR = f'{repo.working_tree_dir}/temp_data/'
 
 B_ORDER = 4
 L_CUTOFF = 120.
@@ -13,7 +18,6 @@ N_FFT = 256
 SR = 8000
 HOP_LEN = int(N_FFT/6)
 DISABLE_TQDM = True
-TEMP_DATADIR = os.path.join(os.getcwd(), 'temp_data/')
 
 def butter_bandpass_filter(data, lowcut, highcut, fs, order):
     from scipy.signal import butter, lfilter
