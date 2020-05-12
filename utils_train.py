@@ -39,7 +39,10 @@ def train_generator(X_train, y_train, batch_size, target_names, setting='stft', 
 
     obj = create_settings_obj(setting)
 
-    train_mean = preprocessing_train_stats.mean.squeeze() # squeeze is redundant now, but necessary if ImageDataGenerator is used
+    if len(preprocessing_train_stats):
+        train_mean = preprocessing_train_stats.mean.squeeze() # squeeze is redundant now, but necessary if ImageDataGenerator is used
+    else:
+        train_mean = 0
     # train_std = preprocessing_train_stats.std.squeeze()
 
     while True:
@@ -60,7 +63,7 @@ def train_generator(X_train, y_train, batch_size, target_names, setting='stft', 
 
                 data = metamorphose(data, setting=setting, stg_obj=obj)
                 # Center data
-                data = data - train_mean
+                # data = data - train_mean
                 # Expand dimensions
                 data = np.expand_dims(data, axis = -1)
                 if using_conv2d:
@@ -79,7 +82,11 @@ def train_generator(X_train, y_train, batch_size, target_names, setting='stft', 
 def valid_generator(X_val, y_val, batch_size, target_names, setting='stft', preprocessing_train_stats=None, using_conv2d=False):
     from tensorflow.keras import utils
 
-    train_mean = preprocessing_train_stats.mean.squeeze() 
+    if len(preprocessing_train_stats):
+        train_mean = preprocessing_train_stats.mean.squeeze() # squeeze is redundant now, but necessary if ImageDataGenerator is used
+    else:
+        train_mean = 0
+
     obj = create_settings_obj(setting)
     while True:
         for start in range(0, len(X_val), batch_size):
@@ -97,7 +104,7 @@ def valid_generator(X_val, y_val, batch_size, target_names, setting='stft', prep
 
                 data = metamorphose(data, setting=setting, stg_obj=obj)
                 # Center data
-                data = data - train_mean
+                # data = data - train_mean
                 # Expand dimensions
                 data = np.expand_dims(data, axis = -1)
                 if using_conv2d:
@@ -513,3 +520,24 @@ def train_model_dl(dataset=None, model_setting=None, splitting=None, data_settin
     results['y_test'] = y_test
     
     return results
+
+def get_labelencoder_mapping(le):
+    '''
+    Return a dict mapping labels to their integer values
+    from an SKlearn LabelEncoder
+    le = a fitted SKlearn LabelEncoder
+    '''
+    res = {}
+    for cl in le.classes_:
+        res.update({cl:le.transform([cl])[0]})
+
+    return res
+
+def get_labels(names=None, only_counts=False):
+    len_bdir = len(BASE_DIR.split('/'))
+    labels = pd.Series(names).apply(lambda x: x.split('/')[len_bdir]).tolist()
+
+    if only_counts:
+        return pd.Series(labels).value_counts()
+    else:
+        return labels

@@ -1,4 +1,4 @@
-__all__ = ['ModelConfiguration', 'TrainConfiguration']
+__all__ = ['ModelConfiguration', 'TrainConfiguration', 'DatasetConfiguration']
 
 from tensorflow.keras.models import Sequential, Model
 from tensorflow.keras.layers import Dense, Dropout, Activation, BatchNormalization,Input, LSTM, GRU, MaxPooling2D
@@ -21,13 +21,51 @@ from tensorflow.keras.applications.vgg19 import VGG19
 from tensorflow.keras.applications.xception import Xception
 
 from utils import TEMP_DATADIR
-import datetime
+from wavhandler import BASE_DIR
+import datetime, os
+import pandas as pd
 import numpy as np
 seed = 42
 np.random.seed(seed)
 
+class DatasetConfiguration(object):
+    def __init__(self, names=[]):
+        assert os.path.isdir(BASE_DIR), "Check BASE_DIR"
+        assert len(names)
+        self.names = names
+        paths = [f"{os.path.join(BASE_DIR,i)}" for i in names]
+        assert all([os.path.isdir(i) for i in paths]), "Non-existent dataset given."
+        self.paths = paths
+        self.species = []
+        self.species_paths = []
+        
+    def select(self, name=None, species=[]):
+        assert name in self.names,  "Unknown dataset selection."
+        dataset_path = os.path.join(BASE_DIR,name)
+        assert all([os.path.isdir(f"{dataset_path}/{s}") for s in species])
+        self.species.extend([f"{name}/{s}" for s in species])
+        self.species_paths.extend([f"{dataset_path}/{s}/" for s in species])
+
+        self.species = pd.Series(self.species).unique().tolist()
+        self.species_paths = pd.Series(self.species_paths).unique().tolist()
+
+    def read(self):
+        import glob
+        assert len(self.species) and len(self.species_paths)
+
+        filenames = {s.split('/')[-1]:[] for s in self.species}
+        for s,p in zip(self.species, self.species_paths):
+            s = s.split('/')[-1]
+            filenames[s].extend(list(glob.iglob(f"{p}/**/*.{'wav'}", recursive=True)))
+
+        self.fnames_dict = filenames
+        self.fnames = pd.Series(sum(self.fnames_dict.values(),[]))
+        self.labels = pd.Series(self.fnames).apply(lambda x: x.split('/')[len(BASE_DIR.split('/'))])
+        self.target_classes = [s.split('/')[-1] for s in self.species]
+        
+
 class ModelConfiguration(object):
-    def __init__(self, model_setting=None, data_setting=None, target_names=None):
+    def __init__(self, model_setting=None, data_setting=None, target_names=None, extra_dense_layer=False):
 
         super(ModelConfiguration, self).__init__()
 
@@ -337,6 +375,17 @@ class ModelConfiguration(object):
             model = Model(inputs=input_layer, outputs=output_layer)
         else:
             raise ValueError("Wrong model setting given.")
+
+        if extra_dense_layer:
+            # Creating a new model to add a penultimate Dense layer
+            # tmp_model is the model without its last softmax
+            tmp_model = Model(model.inputs, model.layers[-2].output)
+            # adding a Dense layer
+            x = Dense(self.nb_classes, activation='relu')(tmp_model.layers[-1].output)
+            x = Dense(self.nb_classes, activation='softmax')(x)
+
+            del model
+            model = Model(inputs=tmp_model.inputs, outputs=x)
 
         self.config = model
 
