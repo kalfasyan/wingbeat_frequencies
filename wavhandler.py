@@ -454,3 +454,10 @@ def get_wingbeat_timestamp(path):
     fname = path.split('/')[-1]
     t = fname.split('_')[0] + fname.split('_')[1]
     return pd.to_datetime(t, format='F%y%m%d%H%M%S')
+
+def get_wingbeat_dates(series):
+    wavnames = series.apply(lambda x: x.split('/')[-1][:-4])
+    wavdates = wavnames.apply(lambda x: pd.to_datetime(''.join(x.split('_')[0:2]), format='F%y%m%d%H%M%S'))#
+    wavdatestr = wavdates.apply(lambda x: x.strftime("%Y%m%d"))
+
+    return wavnames, wavdates, wavdatestr

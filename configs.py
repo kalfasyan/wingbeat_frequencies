@@ -29,7 +29,7 @@ seed = 42
 np.random.seed(seed)
 
 class DatasetConfiguration(object):
-    def __init__(self, names=[]):
+    def __init__(self, names=['Wingbeats','Thomas','Pcfruit','Pcfruit_sensor49','LG','Leafminers']):
         assert os.path.isdir(BASE_DIR), "Check BASE_DIR"
         assert len(names)
         self.names = names

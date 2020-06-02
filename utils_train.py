@@ -184,7 +184,7 @@ def train_test_val_split(X,y, random_state=seed, verbose=1, test_size=0.10, val_
 
 def train_test_filenames(dataset, species, train_dates=[], test_dates=[], plot=False):
     dataset.read(species, loadmat=False)
-    dataset.get_sensor_features()
+    dataset.get_sensor_features(temp_humd=False)
     sub = dataset.df_features
     if plot:
         sub.groupby('datestr')['filenames'].count().plot(kind="bar")
