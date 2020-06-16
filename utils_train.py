@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 seed = 42
 np.random.seed(seed)
-import librosa, cv2, pywt, math, logging, warnings, time, multiprocessing, datetime
+import librosa, pywt, math, logging, warnings, time, multiprocessing, datetime
 from scipy import signal
 from sklearn.utils import shuffle
 from utils import crop_rec, TEMP_DATADIR

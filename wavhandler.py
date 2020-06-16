@@ -10,7 +10,7 @@ import logging
 logger = logging.getLogger()
 logger.setLevel(logging.WARN)
 
-BASE_DIR = '/home/kalfasyan/data/insects/'
+BASE_DIR = '/media/yannis/HGST_4TB/Ubudirs/data/insects/'
 
 class Dataset(object):
     """ """
