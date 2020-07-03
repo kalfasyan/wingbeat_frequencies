@@ -90,16 +90,18 @@ class ModelConfiguration(object):
         elif model_setting == 'VGG19':
             current_model = VGG19
 
-        if data_setting == 'stft':
+        if data_setting in ['stft', 'stftflt']:
             self.input_shape = (129, 120, 1)
-        elif data_setting == 'raw':
+        elif data_setting in ['raw', 'rawflt']:
             self.input_shape = (5000, 1)
             if model_setting.endswith('baseline'):
                 self.input_shape = (5000,1,1)
-        elif data_setting == 'psd_dB':
+        elif data_setting in ['psd_dB', 'psd_dBflt']:
             self.input_shape = (129, 1)
-        elif data_setting == 'cwt':
+        elif data_setting in ['cwt', 'cwtflt']:
             self.input_shape = (127, 127, 1)
+        elif data_setting in ['psd', 'psdflt']:
+            self.input_shape = (4097,1)
         else:
             raise ValueError('Wrong data_setting provided.')
 

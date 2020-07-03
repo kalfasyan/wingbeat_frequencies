@@ -10,7 +10,7 @@ import logging
 logger = logging.getLogger()
 logger.setLevel(logging.WARN)
 
-BASE_DIR = '/media/yannis/HGST_4TB/Ubudirs/data/insects/'
+BASE_DIR = '/home/kalfasyan/data/insects/'
 
 class Dataset(object):
     """ """
@@ -365,10 +365,27 @@ def read_simple_parallel(path):
     wavseries.name = fname
     return wavseries
 
+def read_simple_parallel_filtered(path):
+    import soundfile as sf
+    fname = path.split('/')[-1][:-4] # Filename is the last list element of full path without extension (.wav)
+    wavdata, _ = sf.read(path)
+    wavdata = butter_bandpass_filter(wavdata.ravel(), L_CUTOFF, H_CUTOFF, fs=F_S, order=B_ORDER)
+    wavseries = pd.Series(wavdata)
+    wavseries.name = fname
+    return wavseries
+
 def transform_data_parallel(path):
     from scipy import signal
     x, _ = read_simple([path])
     x = 10*np.log10(signal.welch(x.ravel(), fs=F_S, window='hanning', nperseg=256, noverlap=128+64)[1])
+    return pd.Series(x)
+
+def transform_data_parallel_filtered(path):
+    from scipy import signal
+    x, _ = read_simple([path])
+    x = x.ravel()
+    x = butter_bandpass_filter(x, L_CUTOFF, H_CUTOFF, fs=F_S, order=B_ORDER)
+    x = 10*np.log10(signal.welch(x, fs=F_S, window='hanning', nperseg=256, noverlap=128+64)[1])
     return pd.Series(x)
 
 def transform_data_parallel_melbank(path):
@@ -377,10 +394,28 @@ def transform_data_parallel_melbank(path):
     x = np.log10(np.mean(librosa.feature.melspectrogram(x.ravel(), sr=F_S, n_mels=80), axis=1)) 
     return pd.Series(x)
 
+def transform_data_parallel_melbank_filtered(path):
+    import librosa
+    x, _ = read_simple([path])
+    x = x.ravel()
+    x = butter_bandpass_filter(x, L_CUTOFF, H_CUTOFF, fs=F_S, order=B_ORDER)
+    x = np.log10(np.mean(librosa.feature.melspectrogram(x, sr=F_S, n_mels=80), axis=1)) 
+    return pd.Series(x)
+
 def transform_data_parallel_spectograms(path):
     import librosa
     x, _ = read_simple([path])
     x = x.ravel()
+    x = librosa.stft(x, n_fft = N_FFT, hop_length = HOP_LEN)
+    x = librosa.amplitude_to_db(np.abs(x))
+    x = np.flipud(x).flatten()
+    return pd.Series(x)
+
+def transform_data_parallel_spectograms_filtered(path):
+    import librosa
+    x, _ = read_simple([path])
+    x = x.ravel()
+    x = butter_bandpass_filter(x, L_CUTOFF, H_CUTOFF, fs=F_S, order=B_ORDER)
     x = librosa.stft(x, n_fft = N_FFT, hop_length = HOP_LEN)
     x = librosa.amplitude_to_db(np.abs(x))
     x = np.flipud(x).flatten()
@@ -395,19 +430,48 @@ def transform_data_parallel_cwt(path):
     x = np.flipud(x).flatten()
     return pd.Series(x)
 
+def transform_data_parallel_cwt_filtered(path):
+    import pywt
+    x, _ = read_simple([path])
+    x = x.ravel()
+    x = butter_bandpass_filter(x, L_CUTOFF, H_CUTOFF, fs=F_S, order=B_ORDER)
+    coeff, _ = pywt.cwt(x, range(1,128), 'morl', 1)
+    x = coeff[:,:127]
+    x = np.flipud(x).flatten()
+    return pd.Series(x)
+
 def power_spectral_density_parallel(path):
-    X, _ = read_simple([path])
+    x, _ = read_simple([path])
     fname = path.split('/')[-1][:-4]
-    psd_pow_amps = power_spectral_density(data=X.flatten(), fname=fname, only_powers=True, crop=False)
+    psd_pow_amps = power_spectral_density(data=x.flatten(), fname=fname, only_powers=True, crop=False)
+    psd_pow_amps.name = fname
+    return psd_pow_amps
+
+def power_spectral_density_parallel_filtered(path):
+    x, _ = read_simple([path])
+    x = x.ravel()
+    x = butter_bandpass_filter(x, L_CUTOFF, H_CUTOFF, fs=F_S, order=B_ORDER)
+    fname = path.split('/')[-1][:-4]
+    psd_pow_amps = power_spectral_density(data=x, fname=fname, only_powers=True, crop=False)
     psd_pow_amps.name = fname
     return psd_pow_amps
 
 def transform_data_parallel_psd(path):
     from scipy import signal as sg
     x, _ = read_simple([path])
-    f,p = sg.welch(x.ravel(), fs=8000, scaling='density', window='hanning', nfft=8128, nperseg=256, noverlap=128+64)
-    p = pd.Series(p[:1000])
-    p.index = f[:1000]
+    f,p = sg.welch(x.ravel(), fs=8000, scaling='density', window='hanning', nfft=8192, nperseg=256, noverlap=128+64)
+    p = pd.Series(p)
+    p.index = f
+    return p
+
+def transform_data_parallel_psd_filtered(path):
+    from scipy import signal as sg
+    x, _ = read_simple([path])
+    x = x.ravel()
+    x = butter_bandpass_filter(x, L_CUTOFF, H_CUTOFF, fs=F_S, order=B_ORDER)
+    f,p = sg.welch(x, fs=8000, scaling='density', window='hanning', nfft=8192, nperseg=256, noverlap=128+64)
+    p = pd.Series(p)
+    p.index = f
     return p
 
 def make_df_parallel(setting=None, names=None):
@@ -417,18 +481,32 @@ def make_df_parallel(setting=None, names=None):
     result_list = []
     if setting == 'psd_old':
         result_list.append(pool.map(power_spectral_density_parallel, names))
+    elif setting == 'psd_oldflt':
+        result_list.append(pool.map(power_spectral_density_parallel_filtered, names))
     elif setting == 'psd':
         result_list.append(pool.map(transform_data_parallel_psd, names))
+    elif setting == 'psdflt':
+        result_list.append(pool.map(transform_data_parallel_psd_filtered, names))
     elif setting == 'raw':
         result_list.append(pool.map(read_simple_parallel, names))
+    elif setting == 'rawflt':
+        result_list.append(pool.map(read_simple_parallel_filtered, names))
     elif setting == 'stft':
         result_list.append(pool.map(transform_data_parallel_spectograms, names))
+    elif setting == 'stftflt':
+        result_list.append(pool.map(transform_data_parallel_spectograms_filtered, names))
     elif setting == 'psd_dB':
         result_list.append(pool.map(transform_data_parallel, names))
+    elif setting == 'psd_dBflt':
+        result_list.append(pool.map(transform_data_parallel_filtered, names))
     elif setting == 'melbank':
         result_list.append(pool.map(transform_data_parallel_melbank, names))
+    elif setting == 'melbankflt':
+        result_list.append(pool.map(transform_data_parallel_melbank_filtered, names))
     elif setting == 'cwt':
         result_list.append(pool.map(transform_data_parallel_cwt, names))
+    elif setting == 'cwtflt':
+        result_list.append(pool.map(transform_data_parallel_cwt_filtered, names))
     else:
         logging.error('Wrong setting!')
     pool.close()

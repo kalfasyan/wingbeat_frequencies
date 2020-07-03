@@ -17,7 +17,7 @@ data_setting = sys.argv[2]
 model_setting = sys.argv[3]
 
 assert splitting in ['random','randomcv','custom'], "Wrong splitting method given."
-assert data_setting in ['raw','stft','psd_dB', 'cwt'], "Wrong data settting given."
+assert data_setting in ['raw','stft','psd_dB', 'cwt', 'rawflt','stftflt','psd','psdflt','psd_dBflt'], "Wrong data settting given."
 assert model_setting in ['wavenet','lstm','gru','conv1d','conv1d_psd',
                         'DenseNet121','DenseNet169','DenseNet201',
                         'InceptionResNetV2','VGG16','VGG19',

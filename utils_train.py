@@ -1,4 +1,4 @@
-from utils import TEMP_DATADIR, SR, HOP_LEN, N_FFT, H_CUTOFF, F_S, L_CUTOFF, B_ORDER
+from utils import TEMP_DATADIR, SR, HOP_LEN, N_FFT, H_CUTOFF, F_S, L_CUTOFF, B_ORDER, butter_bandpass_filter
 import pandas as pd
 import numpy as np
 seed = 42
@@ -122,23 +122,27 @@ def valid_generator(X_val, y_val, batch_size, target_names, setting='stft', prep
 
 
 def metamorphose(data, setting='stft', stg_obj=None, img_sz=150):
-    if setting=='stft':
+    if setting.endswith('flt'):
+        data = butter_bandpass_filter(data, L_CUTOFF, H_CUTOFF, fs=F_S, order=B_ORDER)
+    if setting=='stft' or setting=='stftflt':
         data = librosa.stft(data, n_fft = N_FFT, hop_length = HOP_LEN)
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             data = librosa.amplitude_to_db(data)
         data = np.flipud(data).astype(float)
-    elif setting == 'melspec':
+    elif setting == 'melspec' or setting=='melspecflt':
         data = np.log10(librosa.feature.melspectrogram(data, sr=SR, hop_length=HOP_LEN))
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             data = librosa.amplitude_to_db(data)
         data = np.flipud(data)
-    elif setting == 'raw':
+    elif setting == 'raw' or setting=='rawflt':
         pass
-    elif setting == 'psd_dB':
+    elif setting == 'psd_dB' or setting=='psd_dBflt':
         data = 10*np.log10(signal.welch(data, fs=F_S, window='hanning', nperseg=256, noverlap=128+64)[1])
-    elif setting == 'cwt':
+    elif setting == 'psd' or setting == 'psdflt':
+        _,data = signal.welch(data, fs=8000, scaling='density', window='hanning', nfft=8192, nperseg=256, noverlap=128+64)
+    elif setting == 'cwt' or setting=='cwtflt':
         coeff, _ = pywt.cwt(data, range(1,128), 'morl', 1)
         data = coeff[:,:127]
         data = np.flipud(data).astype(float)
@@ -157,7 +161,7 @@ def metamorphose(data, setting='stft', stg_obj=None, img_sz=150):
 
 def create_settings_obj(setting='gasf', img_sz=150):
     # from pyts.image import GramianAngularField, RecurrencePlot, MarkovTransitionField
-    if setting == 'stft' or setting == 'melspec' or setting == 'raw' or setting == 'psd_dB' or setting == 'cwt':
+    if setting in ['stft', 'melspec', 'raw', 'psd_dB', 'cwt', 'stftflt','melspecflt','rawflt','psd','psdflt','psd_dBflt','cwtflt']:
         obj = None
     # elif setting == 'gasf':
     #     obj = GramianAngularField(image_size=img_sz, method='summation')
