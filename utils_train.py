@@ -37,8 +37,6 @@ def random_data_shift_simple(data, u, shift_pct=0.006, axis=0):
 def train_generator(X_train, y_train, batch_size, target_names, setting='stft', preprocessing_train_stats=None, using_conv2d=False):
     from tensorflow.keras import utils
 
-    obj = create_settings_obj(setting)
-
     if len(preprocessing_train_stats):
         train_mean = preprocessing_train_stats.mean.squeeze() # squeeze is redundant now, but necessary if ImageDataGenerator is used
     else:
@@ -61,7 +59,7 @@ def train_generator(X_train, y_train, batch_size, target_names, setting='stft', 
 
 #                 data = random_data_shift(data, u = .2)
 
-                data = metamorphose(data, setting=setting, stg_obj=obj)
+                data = metamorphose(data, setting=setting)
                 # Center data
                 # data = data - train_mean
                 # Expand dimensions
@@ -87,7 +85,6 @@ def valid_generator(X_val, y_val, batch_size, target_names, setting='stft', prep
     else:
         train_mean = 0
 
-    obj = create_settings_obj(setting)
     while True:
         for start in range(0, len(X_val), batch_size):
             x_batch = []
@@ -102,7 +99,7 @@ def valid_generator(X_val, y_val, batch_size, target_names, setting='stft', prep
                 if 'increasing dataset' in test_batch[i].split('/'):
                     data = crop_rec(data)
 
-                data = metamorphose(data, setting=setting, stg_obj=obj)
+                data = metamorphose(data, setting=setting)
                 # Center data
                 # data = data - train_mean
                 # Expand dimensions
@@ -121,7 +118,7 @@ def valid_generator(X_val, y_val, batch_size, target_names, setting='stft', prep
             yield x_batch, y_batch
 
 
-def metamorphose(data, setting='stft', stg_obj=None, img_sz=150):
+def metamorphose(data, setting='stft'):
     if setting.endswith('flt'):
         data = butter_bandpass_filter(data, L_CUTOFF, H_CUTOFF, fs=F_S, order=B_ORDER)
     if setting=='stft' or setting=='stftflt':
@@ -141,41 +138,14 @@ def metamorphose(data, setting='stft', stg_obj=None, img_sz=150):
     elif setting == 'psd_dB' or setting=='psd_dBflt':
         data = 10*np.log10(signal.welch(data, fs=F_S, window='hanning', nperseg=256, noverlap=128+64)[1])
     elif setting == 'psd' or setting == 'psdflt':
-        _,data = signal.welch(data, fs=8000, scaling='density', window='hanning', nfft=8192, nperseg=256, noverlap=128+64)
+        _,data = 10*np.log10(signal.welch(data, fs=8000, scaling='density', window='hanning', nfft=8192, nperseg=256, noverlap=128+64))
     elif setting == 'cwt' or setting=='cwtflt':
         coeff, _ = pywt.cwt(data, range(1,128), 'morl', 1)
         data = coeff[:,:127]
         data = np.flipud(data).astype(float)
-    # elif setting=='gasf':
-    #     data = stg_obj.fit_transform(data.reshape(1,-1)).squeeze()
-    # elif setting=='gadf':
-    #     data = stg_obj.fit_transform(data.reshape(1,-1)).squeeze()
-    # elif setting=='mtf':
-    #     data = stg_obj.fit_transform(data.reshape(1,-1)).squeeze()
-    # elif setting=='rp':
-    #     data = stg_obj.fit_transform(data.reshape(1,-1)).squeeze()
-    #     data = cv2.resize(data,(img_sz,img_sz))
     else:
         raise ValueError("Wrong setting given.")
     return data
-
-def create_settings_obj(setting='gasf', img_sz=150):
-    # from pyts.image import GramianAngularField, RecurrencePlot, MarkovTransitionField
-    if setting in ['stft', 'melspec', 'raw', 'psd_dB', 'cwt', 'stftflt','melspecflt','rawflt','psd','psdflt','psd_dBflt','cwtflt']:
-        obj = None
-    # elif setting == 'gasf':
-    #     obj = GramianAngularField(image_size=img_sz, method='summation')
-    # elif setting == 'gadf':
-    #     obj = GramianAngularField(image_size=img_sz, method='difference')
-    # elif setting == 'mtf':
-    #     obj = MarkovTransitionField(image_size=img_sz)
-    # elif setting == 'rp':
-    #     obj = RecurrencePlot(dimension=7, time_delay=3,
-    #                 threshold='percentage_points',
-    #                 percentage=30)
-    else:
-        raise ValueError("Wrong setting given.")
-    return obj
 
 def train_test_val_split(X,y, random_state=seed, verbose=1, test_size=0.10, val_size=0.2):
     from sklearn.model_selection import train_test_split

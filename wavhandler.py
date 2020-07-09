@@ -459,7 +459,7 @@ def power_spectral_density_parallel_filtered(path):
 def transform_data_parallel_psd(path):
     from scipy import signal as sg
     x, _ = read_simple([path])
-    f,p = sg.welch(x.ravel(), fs=8000, scaling='density', window='hanning', nfft=8192, nperseg=256, noverlap=128+64)
+    f,p = 10*np.log10(sg.welch(x.ravel(), fs=8000, scaling='density', window='hanning', nfft=8192, nperseg=256, noverlap=128+64))
     p = pd.Series(p)
     p.index = f
     return p
