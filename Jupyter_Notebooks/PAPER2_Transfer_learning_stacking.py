@@ -71,10 +71,10 @@ def valid_generator(X_val, y_val, batch_size, target_names, setting='stft'):
             y_batch = np.array(y_batch, np.float32)
             y_batch = utils.to_categorical(y_batch, len(target_names))
             yield x_batch, y_batch
-            
+
 splitting = 'custom'
-data_setting = 'stft'
-model_setting = 'DenseNet121'
+data_setting = 'raw'
+model_setting = 'conv1d'
 
 
 # ### Splitting mosquito data same way it was split to train

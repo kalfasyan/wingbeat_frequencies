@@ -29,22 +29,29 @@ seed = 42
 np.random.seed(seed)
 
 class DatasetConfiguration(object):
-    def __init__(self, names=['Wingbeats','Thomas','Pcfruit','Pcfruit_sensor49','LG','Leafminers']):
+    def __init__(self, names=['Wingbeats','Thomas','Pcfruit','Pcfruit_sensor49','LG','Leafminers', 'Rodrigo','Suzukii_RL']):
         assert os.path.isdir(BASE_DIR), "Check BASE_DIR"
         assert len(names)
         self.names = names
         paths = [f"{os.path.join(BASE_DIR,i)}" for i in names]
-        assert all([os.path.isdir(i) for i in paths]), "Non-existent dataset given."
+        for i in paths:
+            assert os.path.isdir(i), f"{i.spliti('/')[-1]} is not a valid dataset. Path does not exist."
+        # assert all([os.path.isdir(i) for i in paths]), "Non-existent dataset given."
         self.paths = paths
         self.species = []
         self.species_paths = []
-        
+        self.selected = False
+
+    def info(self):
+        print([{self.names[i]:os.listdir(self.paths[i])} for i in range(len(self.paths))])
+
     def select(self, name=None, species=[]):
         assert name in self.names,  "Unknown dataset selection."
         dataset_path = os.path.join(BASE_DIR,name)
         assert all([os.path.isdir(f"{dataset_path}/{s}") for s in species])
         self.species.extend([f"{name}/{s}" for s in species])
         self.species_paths.extend([f"{dataset_path}/{s}/" for s in species])
+        self.selected = True
 
         self.species = pd.Series(self.species).unique().tolist()
         self.species_paths = pd.Series(self.species_paths).unique().tolist()
