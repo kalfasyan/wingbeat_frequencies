@@ -539,3 +539,4 @@ def get_wingbeat_dates(series):
     wavdatestr = wavdates.apply(lambda x: x.strftime("%Y%m%d"))
 
     return wavnames, wavdates, wavdatestr
+

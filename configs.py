@@ -32,11 +32,12 @@ class DatasetConfiguration(object):
     def __init__(self, names=['Wingbeats','Thomas','Pcfruit','Pcfruit_sensor49','LG','Leafminers', 'Rodrigo','Suzukii_RL']):
         assert os.path.isdir(BASE_DIR), "Check BASE_DIR"
         assert len(names)
+        self.base_dir = BASE_DIR
         self.names = names
         paths = [f"{os.path.join(BASE_DIR,i)}" for i in names]
         for i in paths:
-            assert os.path.isdir(i), f"{i.spliti('/')[-1]} is not a valid dataset. Path does not exist."
-        # assert all([os.path.isdir(i) for i in paths]), "Non-existent dataset given."
+            print(f"Dataset - {i.split('/')[-1]} - exists: {os.path.isdir(i)}")
+        assert all([os.path.isdir(i) for i in paths]), "Non-existent dataset given."
         self.paths = paths
         self.species = []
         self.species_paths = []
@@ -45,9 +46,13 @@ class DatasetConfiguration(object):
     def info(self):
         print([{self.names[i]:os.listdir(self.paths[i])} for i in range(len(self.paths))])
 
-    def select(self, name=None, species=[]):
+    def select(self, name=None, species='all'):
         assert name in self.names,  "Unknown dataset selection."
         dataset_path = os.path.join(BASE_DIR,name)
+
+        if species == 'all':
+            species = os.listdir(dataset_path)
+
         assert all([os.path.isdir(f"{dataset_path}/{s}") for s in species])
         self.species.extend([f"{name}/{s}" for s in species])
         self.species_paths.extend([f"{dataset_path}/{s}/" for s in species])
@@ -55,6 +60,10 @@ class DatasetConfiguration(object):
 
         self.species = pd.Series(self.species).unique().tolist()
         self.species_paths = pd.Series(self.species_paths).unique().tolist()
+
+    def select_all(self):
+        for name in self.names:
+            self.select(name=name, species='all')
 
     def read(self):
         import glob
@@ -69,16 +78,98 @@ class DatasetConfiguration(object):
         self.fnames = pd.Series(sum(self.fnames_dict.values(),[]))
         self.labels = pd.Series(self.fnames).apply(lambda x: x.split('/')[len(BASE_DIR.split('/'))])
         self.target_classes = [s.split('/')[-1] for s in self.species]
-        
+        self.df = pd.concat([self.fnames, self.labels], axis=1)
+        self.df.columns = ['fnames','labels']
+
+    def parse_filenames(self, version='1',temp_humd=True, hist_temp=False, hist_humd=False, hist_date=False):
+        """
+        Since the stored fnames contain metadata, this function gets all these features and 
+        constructs a pandas Dataframe with them.
+        """
+        from utils import np_hist
+        assert hasattr(self, 'fnames')
+        df = self.df
+        df['wavnames'] = df['fnames'].apply(lambda x: x.split('/')[-1][:-4])
+        # LightGuide sensor version
+        if version=='1':                        
+            df['date'] = df['wavnames'].apply(lambda x: pd.to_datetime(''.join(x.split('_')[0:2]), 
+                                                                        format='F%y%m%d%H%M%S'))
+            df['datestr'] = df['date'].apply(lambda x: x.strftime("%Y%m%d"))
+            df['date_day'] = df['date'].apply(lambda x: x.day)
+            df['date_hour'] = df['date'].apply(lambda x: x.hour)
+            df['gain'] = df['wavnames'].apply(lambda x: x.split('_')[3:][1])
+            if temp_humd:
+                df['temperature'] = pd.to_numeric(df['wavnames'].apply(lambda x: x.split('_')[3:][3] if len(x.split('_')[3:])>=3 else np.nan))
+                df['humidity'] = pd.to_numeric(df['wavnames'].apply(lambda x: x.split('_')[3:][5] if len(x.split('_')[3:])>=4 else np.nan))
+            if hist_temp:
+                np_hist(df, 'temperature')
+            if hist_humd:
+                np_hist(df, 'humidity')
+            if hist_date:
+                import matplotlib.pyplot as plt
+                df.datestr.sort_values().value_counts()[df.datestr.sort_values().unique()].plot(kind='bar', figsize=(22,10))
+                plt.ylabel('Counts of signals')
+            self.df_info = df
+        # Fresnel sensor version
+        elif version=='2':
+            print('VERSION 2')
+            df['date'] = df['wavnames'].apply(lambda x: pd.to_datetime(''.join(x.split('_')[1]), 
+                                                                        format='%Y%m%d%H%M%S'))
+            df['datestr'] = df['date'].apply(lambda x: x.strftime("%Y%m%d"))
+            df['date_day'] = df['date'].apply(lambda x: x.day)
+            df['date_hour'] = df['date'].apply(lambda x: x.hour)
+            df['index'] = df['wavnames'].apply(lambda x: x.split('_')[2])
+            if temp_humd:
+                df['temperature'] = pd.to_numeric(df['wavnames'].apply(lambda x: x.split('_')[3][4:]))
+                df['humidity'] = pd.to_numeric(df['wavnames'].apply(lambda x: x.split('_')[4][3:]))
+            if hist_temp:
+                np_hist(df, 'temperature')
+            if hist_humd:
+                np_hist(df, 'humidity')
+            if hist_date:
+                import matplotlib.pyplot as plt
+                plt.figure(figsize=(10,6))
+                df.date.hist(xrot=45)
+                plt.ylabel('Counts of signals')
+            self.df_info = df
+        else:
+            print("No sensor features collected. Select valid version")
+        self.sensor_features = True
+
+    def plot_daterange(self, start='', end=''):
+        """
+        Method to plot a histogram within a date range (starting from earliest datapoint to latest)
+        """
+        assert hasattr(self, 'sensor_features'), "Parse filenames first to generate features."
+
+        import matplotlib.pyplot as plt
+        from utils import get_datestr_range
+
+        if '' in {start, end}:
+            start = self.df_info.datestr.sort_values().iloc[0]
+            end = self.df_info.datestr.sort_values().iloc[-1] 
+        all_dates = get_datestr_range(start=start,end=end)
+
+        hist_dict = self.df_info.datestr.value_counts().to_dict()
+        mydict = {}
+        for d in all_dates:
+            if d not in list(hist_dict.keys()):
+                mydict[d] = 0
+            else:
+                mydict[d] = hist_dict[d]
+
+        series = pd.Series(mydict)
+        ax = series.sort_index().plot(xticks=range(0,series.shape[0]), figsize=(24,4), rot=90)
+        ax.set_xticklabels(series.index);
+
 
 class ModelConfiguration(object):
-    def __init__(self, model_setting=None, data_setting=None, target_names=None, extra_dense_layer=False):
+    def __init__(self, model_setting=None, data_setting=None, nb_classes=None, extra_dense_layer=False):
 
         super(ModelConfiguration, self).__init__()
 
         self.model_setting = model_setting
-        self.target_names = target_names
-        self.nb_classes = len(target_names)
+        self.nb_classes = nb_classes
 
         # PRE-TRAINED MODELS
         self.supported_models = ['DenseNet121','DenseNet169','DenseNet201',
@@ -400,7 +491,7 @@ class ModelConfiguration(object):
 
 class TrainConfiguration(object):
     """ Configuration for training procedures. Contains all settings """
-    def __init__(self, dataset=None, setting='raw', model_name='test', batch_size=32, monitor='val_loss', 
+    def __init__(self, nb_classes=None, setting='raw', model_name='test', batch_size=32, monitor='val_loss', 
                 es_patience=7, rlr_patience=3, epochs=100):
 
         super(TrainConfiguration, self).__init__()
@@ -415,8 +506,7 @@ class TrainConfiguration(object):
         self.es_patience = es_patience
         self.rlr_patience = rlr_patience
         self.epochs = epochs
-        self.target_names = np.unique(dataset.target_classes)
-        self.targets = len(self.target_names)
+        self.nb_classes = nb_classes
         self.callbacks_list = [ModelCheckpoint(monitor = self.monitor,
                                     filepath = self.top_weights_path,
                                     save_best_only = True,

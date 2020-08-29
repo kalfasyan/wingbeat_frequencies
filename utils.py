@@ -339,3 +339,19 @@ def process_signal(data=None, fname=None, plot=False):
 
     specs[fname] = results
     return specs
+
+def get_datestr_range(start='',end=''):
+    """
+    Function to create a list of ordered date strings "%Y%m%d"
+    """
+    import datetime
+
+    start = datetime.datetime.strptime(f"{start}", "%Y%m%d")
+    end = datetime.datetime.strptime(f"{end}", "%Y%m%d")
+    date_array = \
+        (start + datetime.timedelta(days=x) for x in range(0, (end-start).days+1))
+
+    datestrlist = [] 
+    for date_object in date_array:
+        datestrlist.append(date_object.strftime("%Y%m%d"))
+    return datestrlist
