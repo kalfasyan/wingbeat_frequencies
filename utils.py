@@ -12,7 +12,7 @@ TEMP_DATADIR = f'{repo.working_tree_dir}/temp_data/'
 
 B_ORDER = 4
 L_CUTOFF = 120.
-H_CUTOFF = 3600.
+H_CUTOFF = 1500.
 F_S = 8000.
 N_FFT = 256
 SR = 8000

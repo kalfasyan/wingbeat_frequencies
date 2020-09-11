@@ -540,3 +540,35 @@ def get_wingbeat_dates(series):
 
     return wavnames, wavdates, wavdatestr
 
+def get_clean_wingbeats_ratio_psd_energy(names=''):
+    import multiprocessing
+    cpus = multiprocessing.cpu_count()
+    pool = multiprocessing.Pool(processes=cpus)
+    result_list = []
+    result_list.append(pool.map(get_psdenergy_score, names))
+    pool.close()
+    return pd.Series(result_list[0])
+
+def get_psdenergy_score(path):
+    import scipy.integrate as it
+    from scipy import signal as sg
+    x, _ = read_simple([path])
+    x = x.ravel()
+    x = butter_bandpass_filter(x, L_CUTOFF, H_CUTOFF, fs=F_S, order=B_ORDER)
+    f,p = sg.welch(x, fs=8000, scaling='density', window='hanning', nfft=8192, nperseg=256, noverlap=128+64)
+    p = pd.Series(p)
+    p.index = f
+    
+    early = it.cumtrapz(p.values[:100],initial=0)[-1]
+    late = it.cumtrapz(p.values[180:280],initial=0)[-1]
+    return late/early
+
+def get_clean_wingbeats_normalization(names='', norm='l2', include_mats=False):
+    from sklearn import preprocessing
+
+    psd = make_df_parallel(names=names, setting='psdflt')
+    vals = preprocessing.normalize(psd.values, norm=norm)
+    scores = np.sum(vals, axis=1) 
+    if include_mats:
+        return scores, psd.values, vals
+    return scores

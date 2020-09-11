@@ -81,6 +81,15 @@ class DatasetConfiguration(object):
         self.df = pd.concat([self.fnames, self.labels], axis=1)
         self.df.columns = ['fnames','labels']
 
+    def clean(self, threshold=25):
+        from wavhandler import get_clean_wingbeats_normalization
+
+        scores = get_clean_wingbeats_normalization(names=self.fnames.tolist(), norm='l2', include_mats=False)
+        self.df['score'] = scores
+        self.df = self.df[self.df['score'] < threshold]
+        self.fnames = self.df.fnames
+        self.labels = self.df.labels
+
     def parse_filenames(self, version='1',temp_humd=True, hist_temp=False, hist_humd=False, hist_date=False):
         """
         Since the stored fnames contain metadata, this function gets all these features and 

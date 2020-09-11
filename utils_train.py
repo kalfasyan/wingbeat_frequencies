@@ -6,6 +6,7 @@ np.random.seed(seed)
 import librosa, pywt, math, logging, warnings, time, multiprocessing, datetime
 from scipy import signal
 from sklearn.utils import shuffle
+from sklearn import preprocessing
 from utils import crop_rec, TEMP_DATADIR
 from wavhandler import Dataset, BASE_DIR
 from configs import *
@@ -121,6 +122,7 @@ def valid_generator(X_val, y_val, batch_size, target_names, setting='stft', prep
 def metamorphose(data, setting='stft'):
     if setting.endswith('flt'):
         data = butter_bandpass_filter(data, L_CUTOFF, H_CUTOFF, fs=F_S, order=B_ORDER)
+
     if setting=='stft' or setting=='stftflt':
         data = librosa.stft(data, n_fft = N_FFT, hop_length = HOP_LEN)
         with warnings.catch_warnings():
@@ -138,7 +140,8 @@ def metamorphose(data, setting='stft'):
     elif setting == 'psd_dB' or setting=='psd_dBflt':
         data = 10*np.log10(signal.welch(data, fs=F_S, window='hanning', nperseg=256, noverlap=128+64)[1])
     elif setting == 'psd' or setting == 'psdflt':
-        _,data = 10*np.log10(signal.welch(data, fs=8000, scaling='density', window='hanning', nfft=8192, nperseg=256, noverlap=128+64))
+        _,data = signal.welch(data, fs=8000, scaling='density', window='hanning', nfft=8192, nperseg=256, noverlap=128+64)
+        data = preprocessing.normalize(data.reshape(1,-1), norm='l1').T.squeeze()
     elif setting == 'cwt' or setting=='cwtflt':
         coeff, _ = pywt.cwt(data, range(1,128), 'morl', 1)
         data = coeff[:,:127]
@@ -172,6 +175,29 @@ def train_test_filenames(dataset, species, train_dates=[], test_dates=[], plot=F
 
     print("{} train filenames, {} test filenames".format(train_fnames.shape[0], test_fnames.shape[0]))
     return train_fnames, test_fnames
+
+def train_test_filenames2(dataset='', species='', clean=False,train_dates=[], test_dates=[], plot=False):
+    from configs import DatasetConfiguration
+
+    dconf = DatasetConfiguration(names=[dataset])
+    dconf.select(name=dataset, species=[species])
+    dconf.read()
+    if clean:
+        dconf.clean()
+    dconf.parse_filenames(temp_humd=False)
+    sub = dconf.df_info
+    if plot:
+        sub.groupby('datestr')['fnames'].count().plot(kind="bar")
+    print(sub['datestr'].unique().tolist())
+
+    test = sub[sub.datestr.isin(test_dates)][['fnames','labels']]
+    if len(train_dates): # if train dates are given
+        train = sub[sub.datestr.isin(train_dates)][['fnames','labels']]
+    else:
+        train = sub[~sub.datestr.isin(test_dates)][['fnames','labels']]
+
+    print("{} train filenames, {} test filenames".format(train.shape[0], test.shape[0]))
+    return train, test
 
 def mosquito_data_split(splitting=None, dataset=None, return_label_encoder=False, downsampling=True):
     from sklearn.preprocessing import LabelEncoder
@@ -324,19 +350,25 @@ def calculate_train_statistics(X_train=None, setting=None):
     train_stats = OrderedDict()
 
     train_matrix = make_df_parallel(names=X_train, setting=setting).values
-    if setting == 'stft':
+    if setting in ['stft', 'stftflt']:
         train_matrix = train_matrix.reshape((len(X_train),129,120,1))
-    elif setting == 'raw':
+        train_stats.mean = np.mean(train_matrix, axis=(0))
+        return train_stats
+    elif setting in ['raw','rawflt']:
         train_matrix = train_matrix.reshape((len(X_train),5000,1))
-    elif setting == 'psd_dB':
+        train_stats.mean = np.mean(train_matrix, axis=(0,1))
+    elif setting in ['psd_dB', 'psd_dBflt']:
         train_matrix = train_matrix.reshape((len(X_train),129,1))
-    elif setting == 'cwt':
+        train_stats.mean = np.mean(train_matrix, axis=(0,1))
+    elif setting in ['cwt', 'cwtflt']:
         train_matrix = train_matrix.reshape((len(X_train),127,127,1))
+        train_stats.mean = np.mean(train_matrix, axis=(0))
+        return train_stats
     else:
         raise ValueError('Wrong setting provided.')
 
     # train_stats.fit(train_matrix)
-    train_stats.mean = np.mean(train_matrix, axis=(0,1))
+    # train_stats.mean = np.mean(train_matrix, axis=(0,1))
 
     return train_stats
 
