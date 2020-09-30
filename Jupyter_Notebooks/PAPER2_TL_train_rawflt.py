@@ -28,7 +28,7 @@ np.random.seed(seed=seed)
 
 splitting = 'random'
 data_setting = 'rawflt'
-model_setting = 'conv1d'
+model_setting = 'dl4tsc_inc'
 
 # assert splitting in ['random','randomcv','custom'], "Wrong splitting method given."
 # assert data_setting in ['raw','stft','psd_dB', 'cwt'], "Wrong data settting given."
