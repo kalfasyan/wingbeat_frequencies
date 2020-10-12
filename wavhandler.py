@@ -1,16 +1,23 @@
 import numpy as np
+
 np.random.seed(42)
-import glob, os
-from natsort import natsorted
-import pandas as pd
-import random
-from utils import *
+import glob
 import logging
+import os
+import random
+
+import librosa
+import pandas as pd
+from natsort import natsorted
+from scipy import signal as sg
+from sklearn import preprocessing
+
+from utils import *
 
 logger = logging.getLogger()
 logger.setLevel(logging.WARN)
 
-BASE_DIR = '/home/kalfasyan/data/insects/'
+BASE_DIR = '/media/yannis/HGST_4TB/Ubudirs/data/insects/'
 
 class Dataset(object):
     """ """
@@ -113,7 +120,6 @@ class Dataset(object):
         Given a range from low to high, calculate the PSD of all signals 
         and remove those that have a peak withing this range.
         """
-        from scipy import signal as sg
         from scipy.signal import find_peaks
 
         assert self.cleaned, "Needs to be cleaned first."
@@ -308,9 +314,9 @@ def read_simple(paths):
     return datamatrix, names
 
 def transform_data(X, setting = None):
-    from scipy import signal
-    from tqdm import tqdm
     import librosa
+    from tqdm import tqdm
+
     # transform the data
     if setting=='stft':
         XX = []#np.zeros((X.shape[0],129*120))
@@ -328,13 +334,12 @@ def transform_data(X, setting = None):
             X = X.reshape(1,-1)
         XX = np.zeros((X.shape[0],129)).astype("float32")   # allocate space
         for i in tqdm(range(X.shape[0]), disable=DISABLE_TQDM):
-            XX[i] = 10*np.log10(signal.welch(X[i], fs=F_S, window='hanning', nperseg=256, noverlap=128+64)[1])
+            XX[i] = 10*np.log10(sg.welch(X[i], fs=F_S, window='hanning', nperseg=256, noverlap=128+64)[1])
             # XX[i] = power_spectral_density(X[i], only_powers=True)
     return XX.squeeze()
 
 def power_spectral_density(data=None, fname=None, only_powers=False, crop=False, bandpass=False,
                             fs=F_S, scaling='density', window='hanning', nperseg=256, noverlap=128+64, nfft=None):
-    from scipy import signal as sg
     from scipy.signal import find_peaks
     from sklearn.preprocessing import normalize
 
@@ -375,17 +380,15 @@ def read_simple_parallel_filtered(path):
     return wavseries
 
 def transform_data_parallel(path):
-    from scipy import signal
     x, _ = read_simple([path])
-    x = 10*np.log10(signal.welch(x.ravel(), fs=F_S, window='hanning', nperseg=256, noverlap=128+64)[1])
+    x = 10*np.log10(sg.welch(x.ravel(), fs=F_S, window='hanning', nperseg=256, noverlap=128+64)[1])
     return pd.Series(x)
 
 def transform_data_parallel_filtered(path):
-    from scipy import signal
     x, _ = read_simple([path])
     x = x.ravel()
     x = butter_bandpass_filter(x, L_CUTOFF, H_CUTOFF, fs=F_S, order=B_ORDER)
-    x = 10*np.log10(signal.welch(x, fs=F_S, window='hanning', nperseg=256, noverlap=128+64)[1])
+    x = 10*np.log10(sg.welch(x, fs=F_S, window='hanning', nperseg=256, noverlap=128+64)[1])
     return pd.Series(x)
 
 def transform_data_parallel_melbank(path):
@@ -457,15 +460,19 @@ def power_spectral_density_parallel_filtered(path):
     return psd_pow_amps
 
 def transform_data_parallel_psd(path):
-    from scipy import signal as sg
     x, _ = read_simple([path])
     f,p = 10*np.log10(sg.welch(x.ravel(), fs=8000, scaling='density', window='hanning', nfft=8192, nperseg=256, noverlap=128+64))
     p = pd.Series(p)
     p.index = f
     return p
 
+def transform_data_parallel_psdHQ(path):
+    data, _ = librosa.load(path, sr = SR)
+    _,data = sg.welch(data, fs=8000, scaling='density', window='hanning', nfft=8192, nperseg=256, noverlap=128+64)
+    # data = preprocessing.normalize(data.reshape(1,-1), norm='l1').T.squeeze()
+    return pd.Series(10*np.log10(data))
+
 def transform_data_parallel_psd_filtered(path):
-    from scipy import signal as sg
     x, _ = read_simple([path])
     x = x.ravel()
     x = butter_bandpass_filter(x, L_CUTOFF, H_CUTOFF, fs=F_S, order=B_ORDER)
@@ -485,6 +492,8 @@ def make_df_parallel(setting=None, names=None):
         result_list.append(pool.map(power_spectral_density_parallel_filtered, names))
     elif setting == 'psd':
         result_list.append(pool.map(transform_data_parallel_psd, names))
+    elif setting == 'psdHQ':
+        result_list.append(pool.map(transform_data_parallel_psdHQ, names))
     elif setting == 'psdflt':
         result_list.append(pool.map(transform_data_parallel_psd_filtered, names))
     elif setting == 'raw':
@@ -551,7 +560,6 @@ def get_clean_wingbeats_ratio_psd_energy(names=''):
 
 def get_psdenergy_score(path):
     import scipy.integrate as it
-    from scipy import signal as sg
     x, _ = read_simple([path])
     x = x.ravel()
     x = butter_bandpass_filter(x, L_CUTOFF, H_CUTOFF, fs=F_S, order=B_ORDER)
