@@ -24,7 +24,7 @@ np.random.seed(seed=seed)
 
 splitting = "random"
 data_setting = "psdHQ"
-model_setting = "xgboost"
+model_setting = "knn"
 
 assert splitting in ['random','randomcv','custom'], "Wrong splitting method given."
 assert data_setting in ['raw','psd_dB','psdHQ'], "Wrong data settting given."
@@ -48,10 +48,6 @@ x_test = make_df_parallel(names=X_test, setting=data_setting).values
 
 
 # ## if "RANDOM"
-
-# In[ ]:
-
-
 results = {}
 if splitting in ['random', 'randomcv']:
     X_train.extend(X_val)
@@ -59,7 +55,7 @@ if splitting in ['random', 'randomcv']:
     x_train = make_df_parallel(names=X_train, setting=data_setting).values
     x_val = make_df_parallel(names=X_val, setting=data_setting).values
 
-    model, res = train_model_ml(dataset=data,
+    _, res = train_model_ml(dataset=data,
                             model_setting=model_setting,
                             splitting=splitting, 
                             data_setting=data_setting,
@@ -72,13 +68,7 @@ if splitting in ['random', 'randomcv']:
                             flag='ML')
     results[splitting] = res
 
-
-# ## if "CUSTOM"
-
-# In[ ]:
-
-
-if splitting == 'custom':
+elif splitting == 'custom':
     train_scores, val_scores, cms, b_accs, logloss, clf_reports, y_preds, y_pred_probas = [],[],[],[],[],[],[],[]
     for i in range(5):
         x_train_fold = make_df_parallel(names=X_train[i], setting=data_setting).values
@@ -120,17 +110,7 @@ if splitting == 'custom':
     results['val_score'] = mean_val_score
     results['balanced_acc_test'] = mean_test_score
     results['logloss_test'] = mean_test_logloss
+    results['model'] = estimator
 
-
-# In[ ]:
-
-
-dd.io.save(f'{TEMP_DATADIR}/{splitting}_{data_setting}_{model_setting}_results.h5', 
+dd.io.save(f'temp_data/{splitting}_{data_setting}_{model_setting}_results.h5', 
             {f'results': results})
-
-
-# In[ ]:
-
-
-
-
