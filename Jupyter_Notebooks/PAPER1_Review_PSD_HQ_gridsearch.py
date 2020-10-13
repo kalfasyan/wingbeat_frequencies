@@ -19,10 +19,21 @@ from sklearn.model_selection import (GridSearchCV, cross_val_score,
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.preprocessing import LabelEncoder
 from sklearn.utils import shuffle
+from sklearn.ensemble import RandomForestClassifier
+from xgboost import XGBClassifier
 from utils_train import (TrainConfiguration, mosquito_data_split,
                          train_generator, train_model_ml, train_test_val_split,
                          valid_generator)
 from wavhandler import *
+import argparse
+
+# construct the argument parse and parse the arguments
+ap = argparse.ArgumentParser()
+ap.add_argument("-s", "--splitting", required=True, help="name of the user")
+ap.add_argument("-d", "--datasetting", required=True, help="name of the user")
+ap.add_argument("-m", "--modelsetting", required=True, help="name of the user")
+ap.add_argument("-t", "--test", required=False, help="name of the user")
+args = vars(ap.parse_args())
 
 n_cpus = multiprocessing.cpu_count()
 
@@ -30,9 +41,10 @@ seed = 42
 np.random.seed(seed=seed)
 
 
-splitting = "random"
-data_setting = "psdHQ"
-model_setting = "knn"
+splitting = args['splitting']#"random"
+data_setting = args['datasetting'] #"psdHQ"
+model_setting = args['modelsetting'] #"knn"
+test = args['test']
 
 assert splitting in ['random','randomcv','custom'], "Wrong splitting method given."
 assert data_setting in ['raw','psd_dB','psdHQ'], "Wrong data settting given."
@@ -49,13 +61,13 @@ x_test = make_df_parallel(names=X_test, setting=data_setting).values
 print("xtest created")
 
 # ## if "RANDOM"
-
-# In[ ]:
-
-
 results = {}
 X_train.extend(X_val)
 y_train.extend(y_val)
+
+if test == 'True':
+    X_train = X_train[:5000]
+    y_train = y_train[:5000]
 
 x_train = make_df_parallel(names=X_train, setting=data_setting).values
 print('xtrain created')
@@ -64,9 +76,33 @@ print('xval created')
 
 # In[ ]:
 
-
-estimator = KNeighborsClassifier(n_neighbors=11, weights='uniform',metric='manhattan', n_jobs=-1)
-parameters = {'n_neighbors':(7,9,11,13,15,17), 'weights':('uniform','distance'), 'metric': ('manhattan','euclidean')}
+if model_setting == 'knn':
+    estimator = KNeighborsClassifier(n_neighbors=11, weights='uniform',metric='manhattan', n_jobs=-1)
+    parameters = {'n_neighbors':(7,9,11,13,15,17), 'weights':('uniform','distance'), 'metric': ('manhattan','euclidean')}
+elif model_setting == 'randomforest':
+    estimator = RandomForestClassifier(bootstrap=True, max_depth=None,
+                                    min_samples_leaf=3, min_samples_split=8,
+                                    max_features='auto', criterion='gini',
+                                    n_estimators=450, n_jobs=-1,
+                                    random_state=seed, verbose=True)
+    parameters = {'bootstrap': (True, False), 'max_depth': (None, 5, 10,50),
+                'min_samples_leaf': (2,3,4),
+                'min_samples_split': (6,8,10),
+                'max_features': ('auto','sqrt','log2'),
+                'criterion': ('gini', 'entropoy'),
+                'n_estimators': (350, 450, 550, 1000)}
+elif model_setting == 'xgboost'
+    estimator = XGBClassifier(max_depth=4,
+                                n_estimators=450,
+                                learning_rate=0.3,
+                                gamma=0.5,
+                                random_state=seed,
+                                seed=seed,
+                                verbose=True)
+    parameters = {'max_depth': (3,4,5),
+                    'learning_rate': (0.2, 0.3, 0.4),
+                    'gamma': (0, 0.5),
+                    'n_estimators': (350,450,550,1000)}
 
 clf = GridSearchCV(estimator, parameters, n_jobs=-1, verbose=1)
 print('running grid search')
