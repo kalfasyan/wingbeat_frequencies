@@ -2,6 +2,7 @@ from wavhandler import Dataset
 import numpy as np
 import sys
 import math
+from utils import TEMP_DATADIR
 from sklearn.preprocessing import LabelEncoder
 from sklearn.utils import shuffle
 from sklearn.model_selection import train_test_split
@@ -61,5 +62,5 @@ elif splitting == 'custom':
                             flag=f'{i}')
         results[f'{splitting}_{i}'] = res
 
-dd.io.save(f'temp_data/{splitting}_{data_setting}_{model_setting}_results.h5', 
+dd.io.save(f'{TEMP_DATADIR}/{splitting}_{data_setting}_{model_setting}_results.h5', 
             {f'results': results})

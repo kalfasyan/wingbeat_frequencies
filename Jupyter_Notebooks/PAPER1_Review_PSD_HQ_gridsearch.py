@@ -56,6 +56,7 @@ print("xtest created")
 results = {}
 X_train.extend(X_val)
 y_train.extend(y_val)
+
 x_train = make_df_parallel(names=X_train, setting=data_setting).values
 print('xtrain created')
 x_val = make_df_parallel(names=X_val, setting=data_setting).values
@@ -64,12 +65,16 @@ print('xval created')
 # In[ ]:
 
 
-estimator = KNeighborsClassifier(n_neighbors=11, weights='uniform',metric='manhattan', n_jobs=min(8,n_cpus))
-parameters = {'n_neighbors':('7','9','11','13','15','17'), 'weights':('uniform','distance'), 'metric': ('manhattan','euclidean')}
+estimator = KNeighborsClassifier(n_neighbors=11, weights='uniform',metric='manhattan', n_jobs=-1)
+parameters = {'n_neighbors':(7,9,11,13,15,17), 'weights':('uniform','distance'), 'metric': ('manhattan','euclidean')}
 
-clf = GridSearchCV(estimator, parameters)
+clf = GridSearchCV(estimator, parameters, n_jobs=-1, verbose=1)
 print('running grid search')
+clf.fit(x_train, y_train)
+print('done')
 
+estimator = clf.best_estimator_
+print('running cv with best model')
 
 cvfolds = 5
 cv_results = cross_validate(estimator, x_train, y_train, cv=cvfolds, 
@@ -77,8 +82,7 @@ cv_results = cross_validate(estimator, x_train, y_train, cv=cvfolds,
                             return_train_score=True, 
                             scoring=make_scorer(balanced_accuracy_score),
                             verbose=1, 
-                            n_jobs=min(8, n_cpus)) 
-print('grid search finished')
+                            n_jobs=-1)
 
 # CREATING RESULTS
 y_preds = [cv_results['estimator'][i].predict(x_test) for i in range(cvfolds)]
@@ -87,7 +91,7 @@ y_pred_probas = [cv_results['estimator'][i].predict_proba(x_test) for i in range
 cms = [confusion_matrix(y_test, y_preds[i]) for i in range(cvfolds)]
 b_accs = [balanced_accuracy_score(y_test, y_preds[i]) for i in range(cvfolds)]
 logloss = [log_loss(y_test, y_pred_probas[i]) for i in range(cvfolds)]
-clf_reports = [classification_report(y_test, y_preds[i], target_names=dataset.target_classes) for i in range(cvfolds)]
+clf_reports = [classification_report(y_test, y_preds[i], target_names=data.target_classes) for i in range(cvfolds)]
 
 mean_train_score = np.mean(cv_results['train_score'])
 mean_val_score = np.mean(cv_results['test_score'])
@@ -105,6 +109,10 @@ results['val_score'] = mean_val_score
 results['balanced_acc_test'] = mean_test_score
 results['logloss_test'] = mean_test_logloss
 results['model'] = cv_results['estimator']
+results['gridsearch'] = clf
+results['gs_bestmodel'] = clf.best_estimator_
+results['gs_bestscore'] = clf.best_score_
+results['gs_bestparams'] = clf.best_params_
 
-dd.io.save(f'{TEMP_DATA_DIR}/{splitting}_{data_setting}_{model_setting}_results.h5', 
+dd.io.save(f'{TEMP_DATADIR}/{splitting}_{data_setting}_{model_setting}_results.h5', 
             {f'results': results})

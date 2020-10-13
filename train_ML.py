@@ -9,6 +9,7 @@ from utils_train import train_test_val_split, TrainConfiguration, train_generato
 from utils_train import valid_generator,mosquito_data_split, train_model_ml
 import deepdish as dd
 from joblib import dump, load
+from utils import TEMP_DATADIR
 from sklearn.metrics import confusion_matrix, classification_report, balanced_accuracy_score, log_loss
 from sklearn.model_selection import cross_val_score
 seed = 42
@@ -93,5 +94,5 @@ elif splitting == 'custom':
     results['logloss_test'] = mean_test_logloss
     results['model'] = estimator
 
-dd.io.save(f'temp_data/{splitting}_{data_setting}_{model_setting}_results.h5', 
+dd.io.save(f'{TEMP_DATADIR}/{splitting}_{data_setting}_{model_setting}_results.h5', 
             {f'results': results})
