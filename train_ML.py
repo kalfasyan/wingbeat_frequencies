@@ -36,7 +36,7 @@ if splitting in ['random', 'randomcv']:
     x_train = make_df_parallel(names=X_train, setting=data_setting).values
     x_val = make_df_parallel(names=X_val, setting=data_setting).values
 
-    model, res = train_model_ml(dataset=data,
+    _, res = train_model_ml(dataset=data,
                             model_setting=model_setting,
                             splitting=splitting, 
                             data_setting=data_setting,
@@ -91,6 +91,7 @@ elif splitting == 'custom':
     results['val_score'] = mean_val_score
     results['balanced_acc_test'] = mean_test_score
     results['logloss_test'] = mean_test_logloss
+    results['model'] = estimator
 
 dd.io.save(f'temp_data/{splitting}_{data_setting}_{model_setting}_results.h5', 
             {f'results': results})

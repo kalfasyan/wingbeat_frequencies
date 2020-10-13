@@ -443,6 +443,7 @@ def train_model_ml(dataset=None, model_setting=None, splitting=None, data_settin
         results['val_score'] = mean_val_score
         results['balanced_acc_test'] = mean_test_score
         results['logloss_test'] = mean_test_logloss
+        results['model'] = cv_results['estimator']
 
     # CROSS VALIDATION TRAINING FOR CUSTOM IS PERFORMED IN MAIN SCRIPT IN A LOOP
     elif splitting == 'custom':

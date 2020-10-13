@@ -469,8 +469,9 @@ def transform_data_parallel_psd(path):
 def transform_data_parallel_psdHQ(path):
     data, _ = librosa.load(path, sr = SR)
     _,data = sg.welch(data, fs=8000, scaling='density', window='hanning', nfft=8192, nperseg=256, noverlap=128+64)
+    data = data[366:1913]
     # data = preprocessing.normalize(data.reshape(1,-1), norm='l1').T.squeeze()
-    return pd.Series(10*np.log10(data))
+    return pd.Series(10*np.log10(data)).iloc[366:1913]
 
 def transform_data_parallel_psd_filtered(path):
     x, _ = read_simple([path])
