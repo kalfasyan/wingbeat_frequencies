@@ -24,7 +24,7 @@ np.random.seed(seed=seed)
 
 splitting = "random"
 data_setting = "psdHQ"
-model_setting = "xgboost"
+model_setting = "knn"
 
 assert splitting in ['random','randomcv','custom'], "Wrong splitting method given."
 assert data_setting in ['raw','psd_dB','psdHQ'], "Wrong data settting given."
@@ -40,12 +40,12 @@ print(data.target_classes)
 print(f'SPLITTING DATA {splitting}')
 X_train, X_val, X_test, y_train, y_val, y_test = mosquito_data_split(splitting=splitting, dataset=data)
 
-
+print("Finished splitting data")
 # In[3]:
 
 
 x_test = make_df_parallel(names=X_test, setting=data_setting).values
-
+print("Finished creating X_test dataframe")
 
 # ## if "RANDOM"
 
@@ -121,14 +121,14 @@ if splitting == 'custom':
     results['balanced_acc_test'] = mean_test_score
     results['logloss_test'] = mean_test_logloss
 
-
+print("Finished training")
 # In[ ]:
 
 
 dd.io.save(f'{TEMP_DATADIR}/{splitting}_{data_setting}_{model_setting}_results.h5', 
             {f'results': results})
 
-
+print("Finished saving data")
 # In[ ]:
 
 
