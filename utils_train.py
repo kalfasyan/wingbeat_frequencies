@@ -390,7 +390,17 @@ def train_model_ml(dataset=None, model_setting=None, splitting=None, data_settin
 
     # DEFINING CHOSEN ESTIMATOR
     if model_setting.startswith('knn'):
-        estimator = KNeighborsClassifier(n_neighbors=11, weights='uniform',metric='manhattan', n_jobs=min(8,n_cpus))
+        if data_setting == 'psdHQ':
+            estimator = KNeighborsClassifier(algorithm='auto', 
+                                            metric='manhattan',
+                                            n_jobs=-1, 
+                                            n_neighbors=15, 
+                                            weights='distance')
+        else:
+            estimator = KNeighborsClassifier(n_neighbors=11, 
+                                            weights='uniform',
+                                            metric='manhattan', 
+                                            n_jobs=min(8,n_cpus))
     elif model_setting.startswith('randomforest'):
         estimator = RandomForestClassifier(bootstrap=True, max_depth=None,
                                             min_samples_leaf=3, min_samples_split=8,
@@ -407,6 +417,8 @@ def train_model_ml(dataset=None, model_setting=None, splitting=None, data_settin
                                     verbose=True)
     else:
         raise NotImplementedError('Not implemented yet.')
+
+    print(f"Using estimator: {estimator}")
 
     # CROSS VALIDATION TRAINING FOR RANDOM/RANDOMCV
     results = {}

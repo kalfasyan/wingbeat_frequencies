@@ -29,7 +29,7 @@ import argparse
 
 # construct the argument parse and parse the arguments
 ap = argparse.ArgumentParser()
-ap.add_argument("-s", "--splitting", required=True, help="name of the user")
+# ap.add_argument("-s", "--splitting", required=True, help="name of the user")
 ap.add_argument("-d", "--datasetting", required=True, help="name of the user")
 ap.add_argument("-m", "--modelsetting", required=True, help="name of the user")
 ap.add_argument("-t", "--test", required=False, help="name of the user")
@@ -41,7 +41,7 @@ seed = 42
 np.random.seed(seed=seed)
 
 
-splitting = args['splitting']#"random"
+splitting = "random" # We perform grid search with random splitting always
 data_setting = args['datasetting'] #"psdHQ"
 model_setting = args['modelsetting'] #"knn"
 test = args['test']
@@ -74,35 +74,23 @@ print('xtrain created')
 x_val = make_df_parallel(names=X_val, setting=data_setting).values
 print('xval created')
 
-# In[ ]:
-
 if model_setting == 'knn':
     estimator = KNeighborsClassifier(n_neighbors=11, weights='uniform',metric='manhattan', n_jobs=-1)
     parameters = {'n_neighbors':(7,9,11,13,15,17), 'weights':('uniform','distance'), 'metric': ('manhattan','euclidean')}
 elif model_setting == 'randomforest':
-    estimator = RandomForestClassifier(bootstrap=True, max_depth=None,
-                                    min_samples_leaf=3, min_samples_split=8,
-                                    max_features='auto', criterion='gini',
-                                    n_estimators=450, n_jobs=-1,
-                                    random_state=seed, verbose=True)
-    parameters = {'bootstrap': (True, False), 'max_depth': (None, 5, 10,50),
-                'min_samples_leaf': (2,3,4),
-                'min_samples_split': (6,8,10),
+    estimator = RandomForestClassifier()
+    parameters = {'max_depth': (None, 5),
+                'min_samples_leaf': (3,4),
+                'min_samples_split': (8,10),
                 'max_features': ('auto','sqrt','log2'),
                 'criterion': ('gini', 'entropoy'),
-                'n_estimators': (350, 450, 550, 1000)}
-elif model_setting == 'xgboost'
-    estimator = XGBClassifier(max_depth=4,
-                                n_estimators=450,
-                                learning_rate=0.3,
-                                gamma=0.5,
-                                random_state=seed,
-                                seed=seed,
-                                verbose=True)
-    parameters = {'max_depth': (3,4,5),
+                'n_estimators': (450, 550, 1000)}
+elif model_setting == 'xgboost':
+    estimator = XGBClassifier()
+    parameters = {'max_depth': (4,5),
                     'learning_rate': (0.2, 0.3, 0.4),
                     'gamma': (0, 0.5),
-                    'n_estimators': (350,450,550,1000)}
+                    'n_estimators': (450,550,1000)}
 
 clf = GridSearchCV(estimator, parameters, n_jobs=-1, verbose=1)
 print('running grid search')
@@ -129,23 +117,15 @@ b_accs = [balanced_accuracy_score(y_test, y_preds[i]) for i in range(cvfolds)]
 logloss = [log_loss(y_test, y_pred_probas[i]) for i in range(cvfolds)]
 clf_reports = [classification_report(y_test, y_preds[i], target_names=data.target_classes) for i in range(cvfolds)]
 
-mean_train_score = np.mean(cv_results['train_score'])
-mean_val_score = np.mean(cv_results['test_score'])
-mean_test_score = np.mean(b_accs)
-mean_test_logloss = np.mean(logloss)
-
-results['y_preds'] = y_preds
 results['y_pred_probas'] = y_pred_probas
 results['cms'] = cms
 results['b_accs'] = b_accs
 results['logloss'] = logloss
 results['clf_reports'] = clf_reports
-results['train_score'] = mean_train_score
-results['val_score'] = mean_val_score
-results['balanced_acc_test'] = mean_test_score
-results['logloss_test'] = mean_test_logloss
+results['train_score'] = cv_results['train_score']
+results['val_score'] = cv_results['val_score']
+results['test_score'] = cv_results['test_score']
 results['model'] = cv_results['estimator']
-results['gridsearch'] = clf
 results['gs_bestmodel'] = clf.best_estimator_
 results['gs_bestscore'] = clf.best_score_
 results['gs_bestparams'] = clf.best_params_

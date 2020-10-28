@@ -460,16 +460,20 @@ def power_spectral_density_parallel_filtered(path):
     return psd_pow_amps
 
 def transform_data_parallel_psd(path):
-    x, _ = read_simple([path])
-    f,p = 10*np.log10(sg.welch(x.ravel(), fs=8000, scaling='density', window='hanning', nfft=8192, nperseg=256, noverlap=128+64))
-    p = pd.Series(p)
-    p.index = f
-    return p
+    data, _ = librosa.load(path, sr = SR)
+    _,data = sg.welch(data, fs=8000, scaling='density', window='hanning', nfft=8192, nperseg=256, noverlap=128+64)
+    data = preprocessing.normalize(data.reshape(1,-1), norm='l1').T.squeeze()
+    return pd.Series(data)
+
+    # x, _ = read_simple([path])
+    # f,p = 10*np.log10(sg.welch(x.ravel(), fs=8000, scaling='density', window='hanning', nfft=8192, nperseg=256, noverlap=128+64))
+    # p = pd.Series(p)
+    # p.index = f
+    # return p
 
 def transform_data_parallel_psdHQ(path):
     data, _ = librosa.load(path, sr = SR)
     _,data = sg.welch(data, fs=8000, scaling='density', window='hanning', nfft=8192, nperseg=256, noverlap=128+64)
-    data = data[366:1913]
     # data = preprocessing.normalize(data.reshape(1,-1), norm='l1').T.squeeze()
     return pd.Series(10*np.log10(data)).iloc[366:1913]
 
