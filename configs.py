@@ -82,9 +82,9 @@ class DatasetConfiguration(object):
         self.df.columns = ['fnames','labels']
 
     def clean(self, threshold=25):
-        from wavhandler import get_clean_wingbeats_normalization
+        from wavhandler import get_clean_wingbeats_multiple_runs
 
-        scores = get_clean_wingbeats_normalization(names=self.fnames.tolist(), norm='l2', include_mats=False)
+        scores = get_clean_wingbeats_multiple_runs(names=self.fnames.tolist())
         self.df['score'] = scores
         self.df = self.df[self.df['score'] < threshold]
         self.fnames = self.df.fnames
