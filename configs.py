@@ -247,7 +247,8 @@ class ModelConfiguration(object):
                 model.add(LSTM(units=128, return_sequences=True))
                 model.add(LSTM(units=128, return_sequences=False))
             model.add(Dropout(0.5))
-            model.add(Dense(self.nb_classes, activation='softmax'))
+            model.add(Dense(self.nb_classes, activation=None))
+            model.add(Activation('softmax'))
         elif model_setting == 'wavenet':
             model=Sequential()
             model.add(Conv1D(16, 3, activation='relu', input_shape=self.input_shape))
@@ -273,7 +274,8 @@ class ModelConfiguration(object):
             model.add(BatchNormalization())
             model.add(GlobalAveragePooling1D())
             model.add(Dropout(0.5))
-            model.add(Dense(self.nb_classes, activation='softmax'))
+            model.add(Dense(self.nb_classes, activation=None))
+            model.add(Activation('softmax'))
         elif model_setting == 'conv1d':
             model = Sequential()
             model.add(Conv1D(16, 3, activation='relu', input_shape=self.input_shape))
@@ -296,7 +298,8 @@ class ModelConfiguration(object):
             model.add(BatchNormalization())
             model.add(GlobalAveragePooling1D())
             model.add(Dropout(0.5))
-            model.add(Dense(self.nb_classes, activation='softmax'))
+            model.add(Dense(self.nb_classes, activation=None))
+            model.add(Activation('softmax'))
 
         # OTHER MODELS
         elif model_setting == 'dl4tsc_inc':
@@ -351,7 +354,8 @@ class ModelConfiguration(object):
             model.add(BatchNormalization())
             model.add(Activation(activation='relu'))
             model.add(GlobalAveragePooling1D())
-            model.add(Dense(self.nb_classes, activation='softmax'))
+            model.add(Dense(self.nb_classes, activation=None))
+            model.add(Activation('softmax'))
 
         elif model_setting == 'tsc_fcn_baseline':
             x = Input(shape=(self.input_shape))
