@@ -72,7 +72,7 @@ def softmax(x):
     return e_x / e_x.sum()
 
 
-def openmax(weibull_model, categories, input_score, eu_weight, alpha=10, distance_type='eucos'):
+def openmax(weibull_model, categories, input_score, eu_weight, alpha=2, distance_type='eucos'):
     """Re-calibrate scores via OpenMax layer
     Output:
         openmax probability and softmax probability
@@ -143,31 +143,67 @@ def compute_mavs_and_scores(penulfeats, targets, nb_classes=3):
 
     return mavs, scores
 
+def compute_test_or_val_scores(penulfeats, targets, nb_classes=3):
+    """
+    penulfeats: needs to be a layer of the same length as the nb_classes
+    """
+    scores = [[] for _ in range(nb_classes)]
 
-def evaluate_openmax(mavs, dists, scores, labels, distance_type, eu_weight=5e-3):
-    from sklearn.metrics import accuracy_score, f1_score
+    for score, t in zip (penulfeats, targets):
+            scores[t].append(score)
+    # Add channel axis (needed at multi-crop evaluation) # TODO: check if I need this
+    scores = [np.array(x)[:, np.newaxis, :] for x in scores]  # (N_c, 1, C) * C
+    return np.vstack(scores)
+
+
+def validate_openmax(mavs, dists, scores, labels, distance_type, eu_weight=5e-3):
+    from sklearn.metrics import accuracy_score, f1_score, balanced_accuracy_score
     categories = np.unique(labels)
 
-    tail_best, alpha_best, th_best = None, None, None
+    # tail_best, alpha_best, th_best = None, None, None
+    tail_best, alpha_best = None, None    
     f1_best = 0.0
-    for tailsize in [20, 40, 80]:
+    for tailsize in [4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,40,60,80]:
         weibull_model = fit_weibull(mavs, dists, categories, tailsize, distance_type)
-        for alpha in [3]:
-            for th in [0.0, 0.5, 0.75, 0.8, 0.85, 0.9]:
-                print(tailsize, alpha, th)
-                pred_y, pred_y_o = [], []
-                for score in scores:
-                    so, ss = openmax(weibull_model, categories, score,
-                                     eu_weight, alpha, distance_type)
-                    pred_y.append(np.argmax(ss) if np.max(ss) >= th else 10)
-                    pred_y_o.append(np.argmax(so) if np.max(so) >= th else 10)
+        for alpha in [1,2]:
+            # for th in [.0, .01, .05, .1, .15, .2, .3, .5, .8, .9, .95, .99]:
+            print(f"\nTesting tailsize: {tailsize},alpha: {alpha}")#, threshold: {th}")
+            pred_y, pred_y_o = [], []
+            prob_y, prob_y_o = [], []
+            for score in scores:
+                so, ss = openmax(weibull_model, categories, score,
+                                    eu_weight, alpha, distance_type)
+                # pred_y.append(np.argmax(ss) if np.max(ss) >= th else 2)
+                # pred_y_o.append(np.argmax(so) if np.max(so) >= th else 2)
+                pred_y.append(np.argmax(ss))
+                pred_y_o.append(np.argmax(so))
+                prob_y.append(ss)
+                prob_y_o.append(so)
 
-                print(accuracy_score(labels, pred_y), accuracy_score(labels, pred_y_o))
-                openmax_score = f1_score(labels, pred_y_o, average="macro")
-                print(f1_score(labels, pred_y, average="macro"), openmax_score)
-                if openmax_score > f1_best:
-                    tail_best, alpha_best, th_best = tailsize, alpha, th
-                    f1_best = openmax_score
+            openmax_score = f1_score(labels, pred_y_o, average='macro')
+            print(f"acc: {balanced_accuracy_score(labels, pred_y):.2f}, acc_openmax: {balanced_accuracy_score(labels, pred_y_o):.2f}")                
+            print(f"F1 score: {f1_score(labels, pred_y, average='macro'):.2f}, Openmax score: {openmax_score:.2f}")
+            if openmax_score > f1_best:
+                # tail_best, alpha_best, th_best = tailsize, alpha, th
+                tail_best, alpha_best = tailsize, alpha
+                f1_best = openmax_score
 
-    print("Best params:")
-    print(tail_best, alpha_best, th_best, f1_best)
+    print("\nBest params:")
+    # print(f"tail best: {tail_best}, alpha_best: {alpha_best},threshold_best: {th_best}, f1_best: {f1_best}")
+    print(f"tail best: {tail_best}, alpha_best: {alpha_best} f1_best: {f1_best}")
+
+def compute_openmax(mavs, dists, scores, categories, distance_type, eu_weight=5e-3, tail=None, alpha=2):
+    from sklearn.metrics import accuracy_score, f1_score, balanced_accuracy_score
+
+    # tail_best, alpha_best, th_best = None, None, None
+    tailsize = tail
+    weibull_model = fit_weibull(mavs, dists, categories, tailsize, distance_type)
+    prob_y, prob_y_o = [], []
+    for score in scores:
+        so, ss = openmax(weibull_model, categories, score,eu_weight, alpha, distance_type)
+        # pred_y.append(np.argmax(ss) if np.max(ss) >= th else 2)
+        # pred_y_o.append(np.argmax(so) if np.max(so) >= th else 2)
+        prob_y.append(ss)
+        prob_y_o.append(so)
+
+    return prob_y, prob_y_o

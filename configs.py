@@ -619,8 +619,9 @@ class Classifier_INCEPTION:
                 input_res = x
 
         gap_layer = keras.layers.GlobalAveragePooling1D()(x)
+        gap_layer2 = keras.layers.Dense(nb_classes, activation=None)(gap_layer)
 
-        output_layer = keras.layers.Dense(nb_classes, activation='softmax')(gap_layer)
+        output_layer = keras.layers.Activation('softmax')(gap_layer2)
 
         model = keras.models.Model(inputs=input_layer, outputs=output_layer)
 

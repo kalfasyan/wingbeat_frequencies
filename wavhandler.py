@@ -17,7 +17,7 @@ from utils import *
 logger = logging.getLogger()
 logger.setLevel(logging.WARN)
 
-BASE_DIR = '/home/kalfasyan/data/insects/'
+BASE_DIR = '/home/kalfasyan/data/wingbeats/'
 
 class Dataset(object):
     """ """
