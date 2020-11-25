@@ -145,7 +145,7 @@ class DatasetConfiguration(object):
             print("No sensor features collected. Select valid version")
         self.sensor_features = True
 
-    def plot_daterange(self, start='', end=''):
+    def plot_daterange(self, start='', end='', figx=8, figy=26, linewidth=4):
         """
         Method to plot a histogram within a date range (starting from earliest datapoint to latest)
         """
@@ -168,7 +168,7 @@ class DatasetConfiguration(object):
                 mydict[d] = hist_dict[d]
 
         series = pd.Series(mydict)
-        ax = series.sort_index().plot(xticks=range(0,series.shape[0]), figsize=(24,4), rot=90)
+        ax = series.sort_index().plot(xticks=range(0,series.shape[0]), figsize=(figy,figx), rot=90, linewidth=linewidth)
         ax.set_xticklabels(series.index);
 
 
@@ -537,7 +537,6 @@ class TrainConfiguration(object):
 
 # resnet model
 from tensorflow import keras
-import numpy as np
 import time
 
 

@@ -35,7 +35,7 @@ def random_data_shift_simple(data, u, shift_pct=0.006, axis=0):
         data = np.roll(data, int(round(np.random.uniform(-(len(data)*shift_pct), (len(data)*shift_pct)))), axis=axis)
     return data
 
-def train_generator(X_train, y_train, batch_size, target_names, setting='stft', preprocessing_train_stats=None, using_conv2d=False):
+def train_generator(X_train, y_train, batch_size, target_names, setting='stft', preprocessing_train_stats=None, using_conv2d=False, binary_labels=False):
     from tensorflow.keras import utils
 
     if len(preprocessing_train_stats):
@@ -74,11 +74,12 @@ def train_generator(X_train, y_train, batch_size, target_names, setting='stft', 
 
             x_batch = np.array(x_batch, np.float32)
             y_batch = np.array(y_batch, np.float32)
-            y_batch = utils.to_categorical(y_batch, len(target_names))
+            if not binary_labels:
+                y_batch = utils.to_categorical(y_batch, len(target_names))
             
             yield x_batch, y_batch
 
-def valid_generator(X_val, y_val, batch_size, target_names, setting='stft', preprocessing_train_stats=None, using_conv2d=False):
+def valid_generator(X_val, y_val, batch_size, target_names, setting='stft', preprocessing_train_stats=None, using_conv2d=False, binary_labels=False):
     from tensorflow.keras import utils
 
     if len(preprocessing_train_stats):
@@ -114,7 +115,9 @@ def valid_generator(X_val, y_val, batch_size, target_names, setting='stft', prep
             x_batch = np.array(x_batch, np.float32)
             y_batch = np.array(y_batch, np.float32)
 
-            y_batch = utils.to_categorical(y_batch, len(target_names))
+            if not binary_labels:
+                y_batch = utils.to_categorical(y_batch, len(target_names))
+
 
             yield x_batch, y_batch
 
