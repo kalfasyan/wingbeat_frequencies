@@ -9,6 +9,8 @@ from sklearn.utils import shuffle
 from sklearn import preprocessing
 from utils import crop_rec, TEMP_DATADIR
 from wavhandler import Dataset, BASE_DIR
+from tensorflow.keras import utils
+
 from configs import *
 n_cpus = multiprocessing.cpu_count()
 
@@ -35,14 +37,7 @@ def random_data_shift_simple(data, u, shift_pct=0.006, axis=0):
         data = np.roll(data, int(round(np.random.uniform(-(len(data)*shift_pct), (len(data)*shift_pct)))), axis=axis)
     return data
 
-def train_generator(X_train, y_train, batch_size, target_names, setting='stft', preprocessing_train_stats=None, using_conv2d=False, binary_labels=False):
-    from tensorflow.keras import utils
-
-    if len(preprocessing_train_stats):
-        train_mean = preprocessing_train_stats.mean.squeeze() # squeeze is redundant now, but necessary if ImageDataGenerator is used
-    else:
-        train_mean = 0
-    # train_std = preprocessing_train_stats.std.squeeze()
+def train_generator(X_train, y_train, batch_size, target_names, setting='stft', using_conv2d=False, binary_labels=False):
 
     while True:
         for start in range(0, len(X_train), batch_size):
@@ -55,19 +50,13 @@ def train_generator(X_train, y_train, batch_size, target_names, setting='stft', 
             
             for i in range(len(train_batch)):
                 data, _ = librosa.load(train_batch[i], sr = SR)
-                if 'increasing dataset' in train_batch[i].split('/'):
-                    data = crop_rec(data)
-
 #                 data = random_data_shift(data, u = .2)
-
                 data = metamorphose(data, setting=setting)
-                # Center data
-                # data = data - train_mean
+
                 # Expand dimensions
                 data = np.expand_dims(data, axis = -1)
                 if using_conv2d:
                     data = np.expand_dims(data, axis = -1)
-                
 
                 x_batch.append(data)
                 y_batch.append(labels_batch[i])
@@ -79,13 +68,7 @@ def train_generator(X_train, y_train, batch_size, target_names, setting='stft', 
             
             yield x_batch, y_batch
 
-def valid_generator(X_val, y_val, batch_size, target_names, setting='stft', preprocessing_train_stats=None, using_conv2d=False, binary_labels=False):
-    from tensorflow.keras import utils
-
-    if len(preprocessing_train_stats):
-        train_mean = preprocessing_train_stats.mean.squeeze() # squeeze is redundant now, but necessary if ImageDataGenerator is used
-    else:
-        train_mean = 0
+def valid_generator(X_val, y_val, batch_size, target_names, setting='stft', using_conv2d=False, binary_labels=False):
 
     while True:
         for start in range(0, len(X_val), batch_size):
@@ -98,12 +81,8 @@ def valid_generator(X_val, y_val, batch_size, target_names, setting='stft', prep
 
             for i in range(len(test_batch)):
                 data, _ = librosa.load(test_batch[i], sr = SR)
-                if 'increasing dataset' in test_batch[i].split('/'):
-                    data = crop_rec(data)
-
                 data = metamorphose(data, setting=setting)
-                # Center data
-                # data = data - train_mean
+
                 # Expand dimensions
                 data = np.expand_dims(data, axis = -1)
                 if using_conv2d:
@@ -117,7 +96,6 @@ def valid_generator(X_val, y_val, batch_size, target_names, setting='stft', prep
 
             if not binary_labels:
                 y_batch = utils.to_categorical(y_batch, len(target_names))
-
 
             yield x_batch, y_batch
 
@@ -344,36 +322,6 @@ def mosquito_data_split(splitting=None, dataset=None, return_label_encoder=False
     else:
         return X_train, X_val, X_test, y_train, y_val, y_test
 
-def calculate_train_statistics(X_train=None, setting=None):
-    from wavhandler import make_df_parallel
-    # from tensorflow.keras.preprocessing.image import ImageDataGenerator
-    from collections import OrderedDict
-
-    # train_stats = ImageDataGenerator(featurewise_center=True, featurewise_std_normalization=True)
-    train_stats = OrderedDict()
-
-    train_matrix = make_df_parallel(names=X_train, setting=setting).values
-    if setting in ['stft', 'stftflt']:
-        train_matrix = train_matrix.reshape((len(X_train),129,120,1))
-        train_stats.mean = np.mean(train_matrix, axis=(0))
-        return train_stats
-    elif setting in ['raw','rawflt']:
-        train_matrix = train_matrix.reshape((len(X_train),5000,1))
-        train_stats.mean = np.mean(train_matrix, axis=(0,1))
-    elif setting in ['psd_dB', 'psd_dBflt']:
-        train_matrix = train_matrix.reshape((len(X_train),129,1))
-        train_stats.mean = np.mean(train_matrix, axis=(0,1))
-    elif setting in ['cwt', 'cwtflt']:
-        train_matrix = train_matrix.reshape((len(X_train),127,127,1))
-        train_stats.mean = np.mean(train_matrix, axis=(0))
-        return train_stats
-    else:
-        raise ValueError('Wrong setting provided.')
-
-    # train_stats.fit(train_matrix)
-    # train_stats.mean = np.mean(train_matrix, axis=(0,1))
-
-    return train_stats
 
 def train_model_ml(dataset=None, model_setting=None, splitting=None, data_setting=None,
                     x_train=None, y_train=None,
@@ -486,13 +434,11 @@ def train_model_dl(dataset=None, model_setting=None, splitting=None, data_settin
 
     model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
 
-    train_stats = calculate_train_statistics(X_train=X_train, setting=data_setting)
     # Actual training
     h = model.fit_generator(train_generator(X_train, y_train, 
                                         batch_size=traincf.batch_size,
                                         target_names=traincf.target_names,
                                         setting=traincf.setting,
-                                        preprocessing_train_stats=train_stats,
                                         using_conv2d=using_conv2d),
                         steps_per_epoch = int(math.ceil(float(len(X_train)) / float(traincf.batch_size))),
                         epochs = traincf.epochs,
@@ -500,7 +446,6 @@ def train_model_dl(dataset=None, model_setting=None, splitting=None, data_settin
                                                             batch_size=traincf.batch_size,
                                                             target_names=traincf.target_names,
                                                             setting=traincf.setting,
-                                                            preprocessing_train_stats=train_stats,
                                                             using_conv2d=using_conv2d),
                         validation_steps=int(math.ceil(float(len(X_test))/float(traincf.batch_size))),
                         callbacks=traincf.callbacks_list,
@@ -522,7 +467,6 @@ def train_model_dl(dataset=None, model_setting=None, splitting=None, data_settin
                                                     batch_size=traincf.batch_size, 
                                                     setting=traincf.setting, 
                                                     target_names=traincf.target_names,
-                                                    preprocessing_train_stats=train_stats,
                                                     using_conv2d=using_conv2d),
             steps = int(math.ceil(float(len(X_test)) / float(traincf.batch_size))))
 

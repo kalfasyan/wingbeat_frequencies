@@ -6,12 +6,15 @@ from scipy import signal
 import logging
 import os
 import git
+from sklearn import preprocessing
+from scipy import signal as sg
+import soundfile as sf
 
 repo = git.Repo('.', search_parent_directories=True)
 TEMP_DATADIR = f'{repo.working_tree_dir}/temp_data/'
 
 B_ORDER = 4
-L_CUTOFF = 120.
+L_CUTOFF = 100.
 H_CUTOFF = 1500.
 F_S = 8000.
 N_FFT = 256

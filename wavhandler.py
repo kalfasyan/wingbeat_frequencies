@@ -6,9 +6,7 @@ import logging
 import os
 import random
 
-import librosa
 import pandas as pd
-from natsort import natsorted
 from scipy import signal as sg
 from sklearn import preprocessing
 
@@ -20,6 +18,7 @@ logger.setLevel(logging.WARN)
 BASE_DIR = '/home/kalfasyan/data/wingbeats/'
 
 class Dataset(object):
+    from natsort import natsorted
     """ """
     def __init__(self, name):
         super(Dataset, self).__init__()
@@ -586,25 +585,3 @@ def get_clean_wingbeats_normalization(names='', norm='l2', include_mats=False):
         return scores, psd.values, vals
     return scores
 
-def normalized_psd_sum(sig):
-    _,p = sg.welch(sig, fs=8000, scaling='density', window='hanning', nfft=8192, nperseg=256, noverlap=128+64)
-    p = preprocessing.normalize(p.reshape(1,-1), norm='l2').T.squeeze()
-    return p.sum()
-
-def psd_multiple_runs_score(path):
-    x, _ = read_simple([path])
-    x = x.ravel()
-    x = butter_bandpass_filter(x, L_CUTOFF, H_CUTOFF, fs=F_S, order=B_ORDER)
-    score1 = normalized_psd_sum(x[:2501])
-    score2 = normalized_psd_sum(x[2500:])
-    score3 = normalized_psd_sum(x[1250:3750])
-    return min([score1, score2, score3])
-
-def get_clean_wingbeats_multiple_runs(names=''):
-    import multiprocessing
-    cpus = multiprocessing.cpu_count()
-    pool = multiprocessing.Pool(processes=cpus)
-    result_list = []
-    result_list.append(pool.map(psd_multiple_runs_score, names))
-    pool.close()
-    return pd.Series(result_list[0])

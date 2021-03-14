@@ -1,17 +1,15 @@
 __all__ = ['ModelConfiguration', 'TrainConfiguration', 'DatasetConfiguration']
 
-from tensorflow.keras.models import Sequential, Model
-from tensorflow.keras.layers import Dense, Dropout, Activation, BatchNormalization,Input, LSTM, GRU, MaxPooling2D
-from tensorflow.keras.layers import Conv1D, Conv2D, Add,GlobalAveragePooling1D, MaxPooling1D, GlobalAveragePooling2D
-from tensorflow.keras.layers import add
-from tensorflow.keras.optimizers import SGD
-from tensorflow.keras.callbacks import ModelCheckpoint, TensorBoard, EarlyStopping, ReduceLROnPlateau, CSVLogger
-from tensorflow.keras.utils import to_categorical
-from tensorflow.keras.regularizers import l2
+import datetime
+import os
+
+import numpy as np
+import pandas as pd
 from sklearn.model_selection import train_test_split
 from tensorflow.keras import utils
 # MODEL CONFIG
-from tensorflow.keras.applications.densenet import DenseNet121, DenseNet169, DenseNet201
+from tensorflow.keras.applications.densenet import (DenseNet121, DenseNet169,
+                                                    DenseNet201)
 from tensorflow.keras.applications.inception_resnet_v2 import InceptionResNetV2
 from tensorflow.keras.applications.inception_v3 import InceptionV3
 from tensorflow.keras.applications.mobilenet import MobileNet
@@ -19,12 +17,22 @@ from tensorflow.keras.applications.nasnet import NASNetLarge, NASNetMobile
 from tensorflow.keras.applications.vgg16 import VGG16
 from tensorflow.keras.applications.vgg19 import VGG19
 from tensorflow.keras.applications.xception import Xception
+from tensorflow.keras.callbacks import (CSVLogger, EarlyStopping,
+                                        ModelCheckpoint, ReduceLROnPlateau,
+                                        TensorBoard)
+from tensorflow.keras.layers import (GRU, LSTM, Activation, Add,
+                                     BatchNormalization, Conv1D, Conv2D, Dense,
+                                     Dropout, GlobalAveragePooling1D,
+                                     GlobalAveragePooling2D, Input,
+                                     MaxPooling1D, MaxPooling2D, add)
+from tensorflow.keras.models import Model, Sequential
+from tensorflow.keras.optimizers import SGD
+from tensorflow.keras.regularizers import l2
+from tensorflow.keras.utils import to_categorical
 
 from utils import TEMP_DATADIR
 from wavhandler import BASE_DIR
-import datetime, os
-import pandas as pd
-import numpy as np
+
 seed = 42
 np.random.seed(seed)
 
@@ -81,12 +89,12 @@ class DatasetConfiguration(object):
         self.df = pd.concat([self.fnames, self.labels], axis=1)
         self.df.columns = ['fnames','labels']
 
-    def clean(self, threshold=25):
+    def clean(self, low_threshold=8.9, high_threshold=20):
         from wavhandler import get_clean_wingbeats_multiple_runs
 
         scores = get_clean_wingbeats_multiple_runs(names=self.fnames.tolist())
         self.df['score'] = scores
-        self.df = self.df[self.df['score'] < threshold]
+        self.df = self.df[(self.df['score'] > low_threshold) & (self.df['score'] < high_threshold)]
         self.fnames = self.df.fnames
         self.labels = self.df.labels
 
@@ -152,6 +160,7 @@ class DatasetConfiguration(object):
         assert hasattr(self, 'sensor_features'), "Parse filenames first to generate features."
 
         import matplotlib.pyplot as plt
+
         from utils import get_datestr_range
 
         if '' in {start, end}:
@@ -173,6 +182,7 @@ class DatasetConfiguration(object):
 
 
 class ModelConfiguration(object):
+
     def __init__(self, model_setting=None, data_setting=None, nb_classes=None, extra_dense_layer=False):
 
         super(ModelConfiguration, self).__init__()
@@ -300,6 +310,34 @@ class ModelConfiguration(object):
             model.add(Dropout(0.5))
             model.add(Dense(self.nb_classes, activation=None))
             model.add(Activation('softmax'))
+        elif model_setting == 'conv1d2':
+            model = Sequential()
+            model.add(Conv1D(16, 3, activation='relu', input_shape=self.input_shape))
+            model.add(BatchNormalization())
+            model.add(MaxPooling1D(2))
+
+            model.add(Conv1D(32, 3, activation='relu'))
+            model.add(BatchNormalization())
+            model.add(MaxPooling1D(2))
+            
+            model.add(Conv1D(64, 3, activation='relu'))
+            model.add(BatchNormalization())
+            model.add(MaxPooling1D(2))
+            
+            model.add(Conv1D(128, 3, activation='relu'))
+            model.add(BatchNormalization())
+            model.add(MaxPooling1D(2))
+
+            model.add(Conv1D(256, 3, activation='relu'))
+            model.add(BatchNormalization())
+            model.add(MaxPooling1D(2))
+            model.add(Dropout(0.5))
+
+            model.add(GlobalAveragePooling1D())
+
+            model.add(Dense(256, activation='relu'))
+            model.add(Dense(self.nb_classes, activation=None))
+            model.add(Activation('softmax'))
 
         # OTHER MODELS
         elif model_setting == 'dl4tsc_inc':
@@ -317,25 +355,23 @@ class ModelConfiguration(object):
 
         elif model_setting == 'conv1d_baseline':
             x = Input(shape=(self.input_shape))
-            conv1 = Conv2D(16, 3, 1, padding='same', activation='relu')(x)
-            conv1 = Conv2D(16, 3, 1, padding='same', activation='relu')(conv1)
+        #    drop_out = Dropout(0.2)(x)
+            conv1 = Conv2D(16, 3, 1, padding='same')(x)
             conv1 = BatchNormalization()(conv1)
-            conv2 = Conv2D(32, 3, 1, padding='same', activation='relu')(conv1)
-            conv2 = Conv2D(32, 3, 1, padding='same', activation='relu')(conv2)
+            conv1 = Activation('relu')(conv1)
+        #    drop_out = Dropout(0.2)(conv1)
+            conv2 = Conv2D(32, 3, 1, padding='same')(conv1)
             conv2 = BatchNormalization()(conv2)
-            pool2 = MaxPooling2D(pool_size=(2, 1), strides=None, padding='same')(conv2)
-            conv3 = Conv2D(64, 3, 1, padding='same', activation='relu')(pool2)
-            conv3 = Conv2D(64, 3, 1, padding='same', activation='relu')(conv3)
+            conv2 = Activation('relu')(conv2)
+        #    drop_out = Dropout(0.2)(conv2)
+            conv3 = Conv2D(128, 3, 1, padding='same')(conv2)
             conv3 = BatchNormalization()(conv3)
-            pool3 = MaxPooling2D(pool_size=(2, 1), strides=None, padding='same')(conv3)
-            conv4 = Conv2D(128, 3, 1, padding='same', activation='relu')(pool3)
-            conv4 = Conv2D(128, 3, 1, padding='same', activation='relu')(conv4)
+            conv3 = Activation('relu')(conv3)
+            # drop_out = Dropout(0.2)(conv3)
+            conv4 = Conv2D(256, 3, 1, padding='same')(conv3)
             conv4 = BatchNormalization()(conv4)
-            pool4 = MaxPooling2D(pool_size=(2, 1), strides=None, padding='same')(conv4)
-            conv5 = Conv2D(256, 3, 1, padding='same', activation='relu')(pool4)
-            conv5 = Conv2D(256, 3, 1, padding='same', activation='relu')(conv5)
-            conv5 = BatchNormalization()(conv5)
-            full = GlobalAveragePooling2D()(conv5)
+            conv4 = Activation('relu')(conv4)
+            full = GlobalAveragePooling2D()(conv4)
             out = Dense(self.nb_classes, activation='softmax')(full)
             model = Model(inputs=x, outputs=out)
 
@@ -535,12 +571,12 @@ class TrainConfiguration(object):
                                 # CSVLogger(filename = self.logfile),
                                 TensorBoard(log_dir=self.log_dir, histogram_freq=1, profile_batch=0)]
 
-# resnet model
-from tensorflow import keras
 import time
 
 
+# resnet model
 class Classifier_INCEPTION:
+    from tensorflow import keras
 
     def __init__(self, output_directory, input_shape, nb_classes, verbose=False, build=True, batch_size=64,
                  nb_filters=32, use_residual=True, use_bottleneck=True, depth=6, kernel_size=41, nb_epochs=1500):
