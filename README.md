@@ -4,3 +4,5 @@ Code for my 1st article in the PhD, ["Towards in-field insect monitoring based o
 In this repository I used `tensorflow.keras` and `scikit-learn` to model wingbeat data as either time series, their frequency representations (PSD) or time-frequency representations (Spectrograms).
 
 It's neither a recently updated or well-organized repository, but someone working on a similar topic could still find interesting classes/functions and jupyter notebooks to get started or perform similar experiments (this is why I'm making it public).
+
+DISCLAIMER: All data/figures/results belong to KU Leuven university that was my employer at the time of this repository creation.
